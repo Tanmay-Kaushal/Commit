@@ -141,3 +141,12 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Database
+backend/*.db
+backend/*.db-wal
+backend/*.db-shm
+
+# Build output
+frontend/dist/
+frontend/dist/
