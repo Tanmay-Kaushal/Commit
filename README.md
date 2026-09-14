@@ -39,7 +39,7 @@ npm install
 npm run dev
 ```
 
-Runs on `http://localhost:5173`.
+Runs on `http://localhost:5174`.
 
 Open that URL in your browser once both servers are running.
 
