@@ -12,13 +12,16 @@ type Event = {
 
 const eventLabels: Record<string, string> = {
   pact_created: 'Pact created',
-  pact_accepted: 'Partner accepted the invite',
+  pact_accepted: 'A participant accepted the invite',
+  pact_declined: 'A participant declined the invite',
   cycle_started: 'New cycle started',
   check_in: 'Checked in',
   cycle_completed: 'Cycle completed',
   cycle_forfeited: 'Cycle forfeited',
+  cycle_settled: 'Cycle settled',
   dispute_raised: 'Dispute raised',
   dispute_resolved: 'Dispute resolved',
+  settlement_confirmed: 'Payment confirmed',
 };
 
 export default function TimelinePage() {

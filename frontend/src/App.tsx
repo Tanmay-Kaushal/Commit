@@ -5,6 +5,7 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import PactPage from './pages/PactPage';
 import TimelinePage from './pages/TimelinePage';
+import ProfilePage from './pages/ProfilePage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -38,6 +39,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <TimelinePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />

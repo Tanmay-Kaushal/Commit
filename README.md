@@ -22,22 +22,22 @@ You'll need two terminals open — one for the backend, one for the frontend.
 
 **1. Backend**
 
-\`\`\`bash
+```bash
 cd backend
 npm install
 npm start
-\`\`\`
+```
 
 Runs on `http://localhost:4000`. A local SQLite database file is created
 automatically on first run — nothing else to set up.
 
 **2. Frontend**
 
-\`\`\`bash
+```bash
 cd frontend
 npm install
 npm run dev
-\`\`\`
+```
 
 Runs on `http://localhost:5173`.
 

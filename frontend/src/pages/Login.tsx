@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -13,7 +13,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     try {
-      await login(email, password);
+      await login(identifier, password);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed');
@@ -28,10 +28,10 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="Enter your email or username"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
             className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900"
             required
           />

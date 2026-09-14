@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const pactRoutes = require('./routes/pacts');
 const checkinRoutes = require('./routes/checkins');
 const eventRoutes = require('./routes/events');
+const friendRoutes = require('./routes/friends');
 const { startCronJob } = require('./cronJob');
 
 const app = express();
@@ -26,12 +27,20 @@ io.on('connection', (socket) => {
   socket.on('join_pact', (pactId) => {
     socket.join(`pact:${pactId}`);
   });
+
+  // Frontend also joins a room keyed to its own user id right after login,
+  // so we can push things like "you were invited to a pact" or "you got a
+  // friend request" straight to that person without a page reload.
+  socket.on('join_user', (userId) => {
+    socket.join(`user:${userId}`);
+  });
 });
 
 app.use('/api/auth', authRoutes);
 app.use('/api/pacts', pactRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/friends', friendRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 

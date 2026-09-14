@@ -53,4 +53,63 @@ function getOrCreateCurrentCycle(pact) {
   return cycle;
 }
 
-module.exports = { getCurrentCycleWindow, getOrCreateCurrentCycle };
+function getActiveParticipants(pactId) {
+  return db.prepare(`
+    SELECT * FROM pact_participants WHERE pact_id = ? AND status = 'active' AND user_id IS NOT NULL
+  `).all(pactId);
+}
+
+// Works out who completed a closed cycle and who didn't, then splits the
+// forfeited stakes evenly among whoever did complete it: everyone who
+// missed it owes their full stake into a pool, and that pool is divided
+// equally across everyone who didn't. If everyone completed (nothing to
+// redistribute) or everyone forfeited (no one to receive it), no money
+// moves. Safe to call again for the same cycle (e.g. after a dispute is
+// approved) — it just recomputes and overwrites the settlement rows.
+function settleCycle(cycle, pact) {
+  const participants = getActiveParticipants(pact.id);
+  const checkIns = db.prepare('SELECT * FROM check_ins WHERE cycle_id = ?').all(cycle.id);
+  const checkedInUserIds = new Set(checkIns.map((c) => c.user_id));
+
+  const completers = participants.filter((p) => checkedInUserIds.has(p.user_id));
+  const failers = participants.filter((p) => !checkedInUserIds.has(p.user_id));
+
+  const stake = pact.stake_amount;
+  const pool = failers.length * stake;
+  const perCompleterShare = completers.length > 0 ? pool / completers.length : 0;
+  const canDistribute = completers.length > 0 && failers.length > 0;
+
+  db.prepare('DELETE FROM cycle_settlements WHERE cycle_id = ?').run(cycle.id);
+
+  const insert = db.prepare(`
+    INSERT INTO cycle_settlements (cycle_id, user_id, completed, amount)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  for (const p of completers) {
+    insert.run(cycle.id, p.user_id, 1, canDistribute ? perCompleterShare : 0);
+  }
+  for (const p of failers) {
+    insert.run(cycle.id, p.user_id, 0, canDistribute ? -stake : 0);
+  }
+
+  const newStatus = failers.length === 0 ? 'completed' : 'forfeited';
+  db.prepare(`
+    UPDATE habit_cycles SET status = ?, processed_at = ? WHERE id = ?
+  `).run(newStatus, DateTime.now().toUTC().toISO(), cycle.id);
+
+  logEvent({
+    pactId: pact.id,
+    cycleId: cycle.id,
+    eventType: 'cycle_settled',
+    payload: {
+      completedUserIds: completers.map((p) => p.user_id),
+      forfeitedUserIds: failers.map((p) => p.user_id),
+      perCompleterShare,
+    },
+  });
+
+  return { status: newStatus, completers, failers };
+}
+
+module.exports = { getCurrentCycleWindow, getOrCreateCurrentCycle, getActiveParticipants, settleCycle };

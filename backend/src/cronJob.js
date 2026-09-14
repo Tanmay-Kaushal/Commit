@@ -1,12 +1,13 @@
 const cron = require('node-cron');
 const { DateTime } = require('luxon');
 const db = require('./db');
-const { logEvent } = require('./events');
+const { settleCycle } = require('./cycles');
 
-// Looks at every active cycle whose end time has passed, decides whether each
-// participant met their required check-ins, and closes the cycle out.
-// processed_at guards against double-processing if this job somehow runs
-// twice for the same cycle (e.g. after a crash + restart).
+// Looks at every active cycle whose end time has passed, decides who
+// completed it and who didn't (any number of participants), settles the
+// stakes between them, and closes the cycle out. processed_at guards
+// against double-processing if this job somehow runs twice for the same
+// cycle (e.g. after a crash + restart).
 function reconcileCycles(io) {
   const now = DateTime.now().toUTC().toISO();
 
@@ -19,32 +20,12 @@ function reconcileCycles(io) {
     const pact = db.prepare('SELECT * FROM habit_pacts WHERE id = ?').get(cycle.pact_id);
     if (!pact || pact.status !== 'active') continue;
 
-    const checkIns = db.prepare('SELECT * FROM check_ins WHERE cycle_id = ?').all(cycle.id);
-    const creatorCheckedIn = checkIns.some(c => c.user_id === pact.creator_id);
-    const partnerCheckedIn = checkIns.some(c => c.user_id === pact.partner_id);
-
-    // Simple rule for this version: each partner needs at least one check-in
-    // logged during the cycle to be considered "on track" for that cycle.
-    // (A more complete version would count check-ins against
-    // frequency_per_week within the cycle rather than just "any at all".)
-    const bothMet = creatorCheckedIn && partnerCheckedIn;
-    const newStatus = bothMet ? 'completed' : 'forfeited';
-
-    db.prepare(`
-      UPDATE habit_cycles SET status = ?, processed_at = ? WHERE id = ?
-    `).run(newStatus, DateTime.now().toUTC().toISO(), cycle.id);
-
-    logEvent({
-      pactId: pact.id,
-      cycleId: cycle.id,
-      eventType: bothMet ? 'cycle_completed' : 'cycle_forfeited',
-      payload: { creatorCheckedIn, partnerCheckedIn },
-    });
+    const { status } = settleCycle(cycle, pact);
 
     if (io) {
       io.to(`pact:${pact.id}`).emit('pact_update', {
         pactId: pact.id,
-        type: bothMet ? 'cycle_completed' : 'cycle_forfeited',
+        type: status === 'completed' ? 'cycle_completed' : 'cycle_forfeited',
       });
     }
   }

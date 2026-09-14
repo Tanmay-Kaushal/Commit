@@ -1,27 +1,102 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import client from '../api/client';
 
 // Best-effort guess at the user's timezone from the browser; they can't
 // change it later in this version, which is fine for a first pass.
 const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
+
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
   const [error, setError] = useState('');
   const { signup } = useAuth();
   const navigate = useNavigate();
 
+  const suggestDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Once the user has typed a plausible email and hasn't hand-edited the
+  // username themselves yet, auto-suggest one based on the email.
+  useEffect(() => {
+    if (usernameTouched) return;
+    if (!email.includes('@')) return;
+
+    if (suggestDebounce.current) clearTimeout(suggestDebounce.current);
+    suggestDebounce.current = setTimeout(async () => {
+      try {
+        const res = await client.get('/auth/suggest-username', { params: { email } });
+        setUsername(res.data.username);
+        setUsernameStatus('available');
+      } catch {
+        // best-effort suggestion — if it fails, the user can still type their own
+      }
+    }, 400);
+
+    return () => {
+      if (suggestDebounce.current) clearTimeout(suggestDebounce.current);
+    };
+  }, [email, usernameTouched]);
+
+  // Check availability whenever the username value changes (whether from
+  // auto-suggestion or the user typing their own).
+  useEffect(() => {
+    if (!username) {
+      setUsernameStatus('idle');
+      return;
+    }
+
+    setUsernameStatus('checking');
+    if (checkDebounce.current) clearTimeout(checkDebounce.current);
+    checkDebounce.current = setTimeout(async () => {
+      try {
+        const res = await client.get('/auth/username-available', { params: { username } });
+        if (res.data.reason === 'invalid') {
+          setUsernameStatus('invalid');
+        } else {
+          setUsernameStatus(res.data.available ? 'available' : 'taken');
+        }
+      } catch {
+        setUsernameStatus('idle');
+      }
+    }, 400);
+
+    return () => {
+      if (checkDebounce.current) clearTimeout(checkDebounce.current);
+    };
+  }, [username]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    if (usernameStatus === 'taken' || usernameStatus === 'invalid') {
+      setError('Please choose a different username');
+      return;
+    }
+
     try {
-      await signup(email, password, detectedTimezone);
+      await signup(email, password, detectedTimezone, username || undefined);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Signup failed');
     }
+  }
+
+  function usernameHint() {
+    if (usernameStatus === 'checking') return <span className="text-stone-400">Checking...</span>;
+    if (usernameStatus === 'available') return <span className="text-emerald-600">Available</span>;
+    if (usernameStatus === 'taken') return <span className="text-red-600">Already taken</span>;
+    if (usernameStatus === 'invalid') {
+      return <span className="text-red-600">3-20 characters: letters, numbers, underscores</span>;
+    }
+    return null;
   }
 
   return (
@@ -48,6 +123,25 @@ export default function Signup() {
             required
             minLength={6}
           />
+          <div>
+            <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => {
+                setUsernameTouched(true);
+                setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+              }}
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900"
+            />
+            <p className="text-xs mt-1">
+              {usernameHint() || (
+                <span className="text-stone-400">
+                  We'll suggest one from your email — feel free to change it
+                </span>
+              )}
+            </p>
+          </div>
           <p className="text-xs text-stone-400">
             Timezone detected as {detectedTimezone}
           </p>
