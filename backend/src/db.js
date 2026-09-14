@@ -8,7 +8,12 @@ const path = require('path');
 // ships with Node itself (22.5+), so `npm install` never needs to compile
 // anything. It's still marked "experimental" by Node, but the API surface
 // used here is stable.
-const db = new DatabaseSync(path.join(__dirname, '..', 'dev.db'));
+// DB_PATH lets this point at a mounted Railway Volume in production (e.g.
+// /data/dev.db) so the database survives redeploys — Railway's regular
+// filesystem is wiped on every deploy. Defaults to the local dev.db file
+// for local development.
+const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'dev.db');
+const db = new DatabaseSync(dbPath);
 
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
