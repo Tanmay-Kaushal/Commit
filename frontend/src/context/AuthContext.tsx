@@ -6,6 +6,7 @@ type User = {
   email: string;
   username: string;
   timezone: string;
+  devModeEnabled?: boolean;
 };
 
 type AuthContextType = {
@@ -13,7 +14,7 @@ type AuthContextType = {
   login: (identifier: string, password: string) => Promise<void>;
   signup: (email: string, password: string, timezone: string, username?: string) => Promise<void>;
   logout: () => void;
-  updateProfile: (updates: { username?: string; timezone?: string }) => Promise<User>;
+  updateProfile: (updates: { username?: string; timezone?: string; devModeEnabled?: boolean }) => Promise<User>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -46,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  async function updateProfile(updates: { username?: string; timezone?: string }) {
+  async function updateProfile(updates: { username?: string; timezone?: string; devModeEnabled?: boolean }) {
     const res = await client.put('/auth/me', updates);
     const token = localStorage.getItem('token') || '';
     persist(res.data, token);

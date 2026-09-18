@@ -8,11 +8,11 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
-    preview: {
-    // Railway assigns a dynamic *.up.railway.app subdomain (and you may add
-    // a custom domain later), so rather than hardcode one host we just
-    // trust whatever host the request comes in on.
-    host: true,
-    allowedHosts: true,
+  build: {
+    // Built straight into the backend's public/ folder so one Express
+    // process can serve both the API and the compiled frontend — no
+    // second Railway service, no separate root directory to configure.
+    outDir: '../backend/public',
+    emptyOutDir: true,
   },
 })

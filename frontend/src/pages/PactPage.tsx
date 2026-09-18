@@ -129,9 +129,9 @@ export default function PactPage() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-stone-50">
+      <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
         <NavBar />
-        <div className="max-w-3xl mx-auto px-4 py-8 text-stone-400 text-sm">Loading...</div>
+        <div className="max-w-3xl mx-auto px-4 py-8 text-stone-400 dark:text-stone-500 text-sm">Loading...</div>
       </div>
     );
   }
@@ -155,25 +155,25 @@ export default function PactPage() {
     !myDisputeAlreadyRaised;
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <NavBar />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <Link to="/dashboard" className="text-sm text-stone-500 underline">
+        <Link to="/dashboard" className="text-sm text-stone-500 dark:text-stone-400 underline">
           &larr; Back to pacts
         </Link>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-6 mt-4">
-          <h1 className="text-xl font-semibold text-stone-900">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-6 mt-4">
+          <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">
             {pact.habit_description}
-            {pact.is_group ? <span className="ml-2 text-xs text-stone-400 font-normal">(group)</span> : null}
+            {pact.is_group ? <span className="ml-2 text-xs text-stone-400 dark:text-stone-500 font-normal">(group)</span> : null}
           </h1>
-          <p className="text-sm text-stone-500 mt-1">
+          <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
             {pact.frequency_per_week}x/week &middot; stake {pact.stake_amount} each
           </p>
 
           {iAmPendingHere ? (
-            <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-amber-700 text-sm mb-3">You've been invited to this pact.</p>
+            <div className="mt-6 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <p className="text-amber-700 dark:text-amber-400 text-sm mb-3">You've been invited to this pact.</p>
               <div className="flex gap-2">
                 <button
                   onClick={handleAccept}
@@ -183,18 +183,18 @@ export default function PactPage() {
                 </button>
                 <button
                   onClick={handleReject}
-                  className="text-sm bg-stone-200 text-stone-700 rounded-lg px-3 py-1.5"
+                  className="text-sm bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg px-3 py-1.5"
                 >
                   Reject
                 </button>
               </div>
             </div>
           ) : pact.status === 'pending_invite' ? (
-            <p className="text-amber-600 text-sm mt-4">
+            <p className="text-amber-600 dark:text-amber-400 text-sm mt-4">
               Waiting for everyone invited to accept before this pact starts.
             </p>
           ) : pact.status === 'declined' ? (
-            <p className="text-red-500 text-sm mt-4">This pact was declined and never started.</p>
+            <p className="text-red-500 dark:text-red-400 text-sm mt-4">This pact was declined and never started.</p>
           ) : (
             <>
               {cycle && (
@@ -203,9 +203,9 @@ export default function PactPage() {
                     const checkedIn = checkIns.some((c) => c.user_id === p.user_id);
                     const isMe = p.user_id === user?.id;
                     return (
-                      <div key={p.id} className="border border-stone-200 rounded-lg p-4">
-                        <p className="text-sm text-stone-500 mb-1">{isMe ? 'You' : participantLabel(p)}</p>
-                        <p className={`font-medium ${checkedIn ? 'text-emerald-600' : 'text-stone-400'}`}>
+                      <div key={p.id} className="border border-stone-200 dark:border-stone-700 rounded-lg p-4">
+                        <p className="text-sm text-stone-500 dark:text-stone-400 mb-1">{isMe ? 'You' : participantLabel(p)}</p>
+                        <p className={`font-medium ${checkedIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-stone-400 dark:text-stone-500'}`}>
                           {checkedIn ? 'Checked in' : 'Not yet'}
                         </p>
                       </div>
@@ -218,22 +218,22 @@ export default function PactPage() {
                 <button
                   onClick={handleCheckIn}
                   disabled={myCheckedIn}
-                  className="mt-6 bg-stone-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="mt-6 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {myCheckedIn ? 'Already checked in' : 'Check in for this cycle'}
                 </button>
               )}
 
-              {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
+              {error && <p className="text-red-600 dark:text-red-400 text-sm mt-4">{error}</p>}
 
               {lastClosedCycle && (
-                <div className="mt-8 border-t border-stone-200 pt-6">
-                  <h2 className="text-sm font-medium text-stone-600 mb-3">
+                <div className="mt-8 border-t border-stone-200 dark:border-stone-800 pt-6">
+                  <h2 className="text-sm font-medium text-stone-600 dark:text-stone-400 mb-3">
                     Last cycle ({lastClosedCycle.status === 'completed' ? 'everyone completed' : 'settlement'})
                   </h2>
 
                   {lastClosedCycle.status === 'completed' ? (
-                    <p className="text-emerald-600 text-sm">
+                    <p className="text-emerald-600 dark:text-emerald-400 text-sm">
                       Everyone completed this cycle — no stakes changed hands.
                     </p>
                   ) : (
@@ -251,35 +251,35 @@ export default function PactPage() {
                         return (
                           <div
                             key={s.id}
-                            className="flex items-center justify-between border border-stone-200 rounded-lg px-4 py-3"
+                            className="flex items-center justify-between border border-stone-200 dark:border-stone-700 rounded-lg px-4 py-3"
                           >
                             <div>
-                              <p className="text-sm text-stone-900">{label}</p>
-                              <p className="text-xs text-stone-400">
+                              <p className="text-sm text-stone-900 dark:text-stone-100">{label}</p>
+                              <p className="text-xs text-stone-400 dark:text-stone-500">
                                 {s.completed ? 'Completed' : 'Forfeited'}
                               </p>
                             </div>
                             <div className="flex items-center gap-3">
                               {isForfeit && (
-                                <span className="text-sm text-red-600 font-medium">
+                                <span className="text-sm text-red-600 dark:text-red-400 font-medium">
                                   Owes {Math.abs(s.amount).toFixed(2)}
                                 </span>
                               )}
                               {isReceipt && (
-                                <span className="text-sm text-emerald-600 font-medium">
+                                <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
                                   Gets {s.amount.toFixed(2)}
                                 </span>
                               )}
                               {s.amount === 0 && !s.completed && (
-                                <span className="text-sm text-stone-400">No one to pay</span>
+                                <span className="text-sm text-stone-400 dark:text-stone-500">No one to pay</span>
                               )}
                               {isForfeit && s.settled && (
-                                <span className="text-xs text-stone-400">Paid &#10003;</span>
+                                <span className="text-xs text-stone-400 dark:text-stone-500">Paid &#10003;</span>
                               )}
                               {canConfirm && (
                                 <button
                                   onClick={() => handleConfirmSettlement(s.id)}
-                                  className="text-xs underline text-stone-500"
+                                  className="text-xs underline text-stone-500 dark:text-stone-400"
                                 >
                                   Confirm paid
                                 </button>
@@ -292,12 +292,12 @@ export default function PactPage() {
                   )}
 
                   {canIDispute && (
-                    <button onClick={handleDispute} className="text-sm text-red-700 underline mt-4">
+                    <button onClick={handleDispute} className="text-sm text-red-700 dark:text-red-400 underline mt-4">
                       I did it but forgot to log it
                     </button>
                   )}
                   {myDisputeAlreadyRaised && (
-                    <p className="text-amber-600 text-sm mt-4">
+                    <p className="text-amber-600 dark:text-amber-400 text-sm mt-4">
                       Your dispute is waiting on another participant to resolve it.
                     </p>
                   )}
@@ -305,8 +305,8 @@ export default function PactPage() {
                   {disputesForOthers.length > 0 && (
                     <div className="mt-4 space-y-2">
                       {disputesForOthers.map((d) => (
-                        <div key={d.id} className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                          <p className="text-amber-700 text-sm mb-2">
+                        <div key={d.id} className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                          <p className="text-amber-700 dark:text-amber-400 text-sm mb-2">
                             {d.username || d.email} disputes being marked as forfeited.
                           </p>
                           <div className="flex gap-2">
@@ -318,7 +318,7 @@ export default function PactPage() {
                             </button>
                             <button
                               onClick={() => handleResolveDispute(d.user_id, false)}
-                              className="text-sm bg-stone-200 text-stone-700 rounded-lg px-3 py-1.5"
+                              className="text-sm bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg px-3 py-1.5"
                             >
                               Reject
                             </button>
@@ -334,7 +334,7 @@ export default function PactPage() {
 
           <Link
             to={`/pacts/${pactId}/timeline`}
-            className="block mt-6 text-sm text-stone-500 underline"
+            className="block mt-6 text-sm text-stone-500 dark:text-stone-400 underline"
           >
             View full history
           </Link>

@@ -1,12 +1,17 @@
 const { DateTime } = require('luxon');
 const db = require('./db');
 const { logEvent } = require('./events');
+const devTime = require('./devTime');
 
 // Figures out the current cycle window for a pact, based on the creator's
 // timezone. Not bulletproof for every edge case (e.g. if partner is in a
 // wildly different timezone the "day" boundary favors the creator) but
 // good enough for normal use.
-function getCurrentCycleWindow(pact, referenceTime = DateTime.now()) {
+//
+// referenceTime defaults to devTime.now() rather than the real clock, so
+// that Developer Mode's simulated time (see devTime.js) flows through to
+// cycle math without every caller having to know about it.
+function getCurrentCycleWindow(pact, referenceTime = devTime.now()) {
   const creator = db.prepare('SELECT * FROM users WHERE id = ?').get(pact.creator_id);
   const tz = creator?.timezone || 'UTC';
 
@@ -112,4 +117,27 @@ function settleCycle(cycle, pact) {
   return { status: newStatus, completers, failers };
 }
 
-module.exports = { getCurrentCycleWindow, getOrCreateCurrentCycle, getActiveParticipants, settleCycle };
+// Bravo popup: pushes a live "you completed the pact" notification straight
+// to every active participant, independent of whether they're currently
+// looking at the pact page (unlike the pact:<id> room updates, which only
+// reach people already viewing it).
+function notifyCycleOutcome(io, pact, status) {
+  if (!io || status !== 'completed') return;
+  const participants = getActiveParticipants(pact.id);
+  for (const p of participants) {
+    if (p.user_id) {
+      io.to(`user:${p.user_id}`).emit('pact_completed', {
+        pactId: pact.id,
+        habitDescription: pact.habit_description,
+      });
+    }
+  }
+}
+
+module.exports = {
+  getCurrentCycleWindow,
+  getOrCreateCurrentCycle,
+  getActiveParticipants,
+  settleCycle,
+  notifyCycleOutcome,
+};

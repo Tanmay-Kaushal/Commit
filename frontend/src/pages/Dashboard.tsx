@@ -225,14 +225,14 @@ export default function Dashboard() {
     if (pact.status === 'pending_invite') {
       const iAmPending = pendingForMe(pact);
       if (iAmPending) {
-        return <span className="text-amber-600 text-xs font-medium">Invite pending — join?</span>;
+        return <span className="text-amber-600 dark:text-amber-400 text-xs font-medium">Invite pending — join?</span>;
       }
-      return <span className="text-stone-400 text-xs">Waiting on others to accept</span>;
+      return <span className="text-stone-400 dark:text-stone-500 text-xs">Waiting on others to accept</span>;
     }
     if (pact.status === 'declined') {
-      return <span className="text-red-500 text-xs font-medium">Declined</span>;
+      return <span className="text-red-500 dark:text-red-400 text-xs font-medium">Declined</span>;
     }
-    return <span className="text-emerald-600 text-xs font-medium">Active</span>;
+    return <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">Active</span>;
   }
 
   // We don't get per-participant status in the list endpoint, so treat any
@@ -243,14 +243,14 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <NavBar />
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold text-stone-900">Your pacts</h1>
+          <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">Your pacts</h1>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="bg-stone-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 transition"
+            className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition"
           >
             {showForm ? 'Cancel' : 'New pact'}
           </button>
@@ -259,55 +259,55 @@ export default function Dashboard() {
         {showForm && (
           <form
             onSubmit={handleCreate}
-            className="bg-white border border-stone-200 rounded-xl p-6 mb-6 space-y-4"
+            className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-6 mb-6 space-y-4"
           >
             <div>
-              <label className="text-sm text-stone-600 block mb-1">Habit</label>
+              <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Habit</label>
               <input
                 value={habitDescription}
                 onChange={(e) => setHabitDescription(e.target.value)}
                 placeholder="e.g. Run 3x a week"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
                 required
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-stone-600 block mb-1">Times per week</label>
+                <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Times per week</label>
                 <input
                   type="text"
                   inputMode="numeric"
                   placeholder="e.g. 3"
                   value={frequencyPerWeek}
                   onChange={handleNumberChange(setFrequencyPerWeek)}
-                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="text-sm text-stone-600 block mb-1">Cycle length (days)</label>
+                <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Cycle length (days)</label>
                 <input
                   type="text"
                   inputMode="numeric"
                   placeholder="e.g. 7"
                   value={cycleLengthDays}
                   onChange={handleNumberChange(setCycleLengthDays)}
-                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
             </div>
             <div>
-              <label className="text-sm text-stone-600 block mb-1">Stake amount (per person)</label>
+              <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Stake amount (per person)</label>
               <input
                 type="text"
                 inputMode="numeric"
                 placeholder="e.g. 100"
                 value={stakeAmount}
                 onChange={handleNumberChange(setStakeAmount)}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
               />
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-stone-600">
+            <label className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
               <input
                 type="checkbox"
                 checked={isGroup}
@@ -326,14 +326,14 @@ export default function Dashboard() {
               <>
                 {friends.length > 0 && (
                   <div>
-                    <label className="text-sm text-stone-600 block mb-1">Invite a friend</label>
+                    <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Invite a friend</label>
                     <select
                       value={selectedFriendId}
                       onChange={(e) => {
                         setSelectedFriendId(e.target.value);
                         if (e.target.value) setPartnerIdentifier('');
                       }}
-                      className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white"
+                      className="w-full border border-stone-300 dark:border-stone-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-stone-900 dark:text-stone-100"
                     >
                       <option value="">Choose from your friends...</option>
                       {friends.map((f) => (
@@ -346,7 +346,7 @@ export default function Dashboard() {
                 )}
 
                 <div>
-                  <label className="text-sm text-stone-600 block mb-1">
+                  <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">
                     {friends.length > 0 ? 'Or invite by email/username' : "Partner's email or username"}
                   </label>
                   <input
@@ -356,7 +356,7 @@ export default function Dashboard() {
                       if (e.target.value) setSelectedFriendId('');
                     }}
                     placeholder="partner@example.com or username"
-                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
                     disabled={selectedFriendId !== ''}
                   />
                 </div>
@@ -365,15 +365,15 @@ export default function Dashboard() {
               <>
                 {friends.length > 0 && (
                   <div>
-                    <label className="text-sm text-stone-600 block mb-1">Invite friends</label>
+                    <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Invite friends</label>
                     <div className="flex flex-wrap gap-2">
                       {friends.map((f) => (
                         <label
                           key={f.id}
                           className={`text-xs border rounded-full px-3 py-1 cursor-pointer transition ${
                             groupFriendIds.includes(String(f.id))
-                              ? 'bg-stone-900 text-white border-stone-900'
-                              : 'bg-white text-stone-600 border-stone-300'
+                              ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100'
+                              : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-300 dark:border-stone-700'
                           }`}
                         >
                           <input
@@ -389,24 +389,24 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div>
-                  <label className="text-sm text-stone-600 block mb-1">
+                  <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">
                     Or add more by email/username (comma-separated)
                   </label>
                   <input
                     value={groupExtraIdentifiers}
                     onChange={(e) => setGroupExtraIdentifiers(e.target.value)}
                     placeholder="alice@example.com, bob_j"
-                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
                   />
                 </div>
               </>
             )}
 
-            {error && <p className="text-red-600 text-sm">{error}</p>}
+            {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
             <button
               type="submit"
               disabled={!canSubmit}
-              className="bg-stone-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Create pact
             </button>
@@ -415,14 +415,14 @@ export default function Dashboard() {
 
         {incomingRequests.length > 0 && (
           <div className="mb-6">
-            <h2 className="text-sm font-medium text-stone-600 mb-3">Friend requests</h2>
+            <h2 className="text-sm font-medium text-stone-600 dark:text-stone-400 mb-3">Friend requests</h2>
             <div className="space-y-2">
               {incomingRequests.map((r) => (
                 <div
                   key={r.id}
-                  className="bg-white border border-stone-200 rounded-lg px-4 py-3 flex items-center justify-between"
+                  className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg px-4 py-3 flex items-center justify-between"
                 >
-                  <span className="text-sm text-stone-900">{r.username} ({r.email})</span>
+                  <span className="text-sm text-stone-900 dark:text-stone-100">{r.username} ({r.email})</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleAcceptRequest(r.id)}
@@ -432,7 +432,7 @@ export default function Dashboard() {
                     </button>
                     <button
                       onClick={() => handleRejectRequest(r.id)}
-                      className="text-sm bg-stone-200 text-stone-700 rounded-lg px-3 py-1.5"
+                      className="text-sm bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg px-3 py-1.5"
                     >
                       Reject
                     </button>
@@ -444,10 +444,10 @@ export default function Dashboard() {
         )}
 
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-stone-600">Friends</h2>
+          <h2 className="text-sm font-medium text-stone-600 dark:text-stone-400">Friends</h2>
           <button
             onClick={() => setShowFriendForm(!showFriendForm)}
-            className="text-sm text-stone-900 underline"
+            className="text-sm text-stone-900 dark:text-stone-100 underline"
           >
             {showFriendForm ? 'Cancel' : 'Add friend'}
           </button>
@@ -456,20 +456,20 @@ export default function Dashboard() {
         {showFriendForm && (
           <form
             onSubmit={handleAddFriend}
-            className="bg-white border border-stone-200 rounded-xl p-4 mb-4 flex gap-2 items-start"
+            className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-4 mb-4 flex gap-2 items-start"
           >
             <div className="flex-1">
               <input
                 value={friendIdentifier}
                 onChange={(e) => setFriendIdentifier(e.target.value)}
                 placeholder="Email or username"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
               />
-              {friendError && <p className="text-red-600 text-sm mt-1">{friendError}</p>}
+              {friendError && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{friendError}</p>}
             </div>
             <button
               type="submit"
-              className="bg-stone-900 text-white text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 transition"
+              className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition"
             >
               Send request
             </button>
@@ -482,18 +482,18 @@ export default function Dashboard() {
               openFriendId === f.id ? (
                 <span
                   key={f.id}
-                  className="text-xs bg-white border border-stone-300 rounded-full pl-3 pr-1 py-1 text-stone-600 flex items-center gap-2"
+                  className="text-xs bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-full pl-3 pr-1 py-1 text-stone-600 dark:text-stone-400 flex items-center gap-2"
                 >
                   {f.username}
                   <button
                     onClick={() => handleRemoveFriend(f.id)}
-                    className="text-red-600 font-medium hover:text-red-700"
+                    className="text-red-600 dark:text-red-400 font-medium hover:text-red-700 dark:hover:text-red-300"
                   >
                     Remove
                   </button>
                   <button
                     onClick={() => setOpenFriendId(null)}
-                    className="text-stone-400 hover:text-stone-600"
+                    className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300"
                     aria-label="Cancel"
                   >
                     &times;
@@ -503,7 +503,7 @@ export default function Dashboard() {
                 <button
                   key={f.id}
                   onClick={() => setOpenFriendId(f.id)}
-                  className="text-xs bg-white border border-stone-200 rounded-full px-3 py-1 text-stone-600 hover:border-stone-400 transition"
+                  className="text-xs bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-full px-3 py-1 text-stone-600 dark:text-stone-400 hover:border-stone-400 dark:hover:border-stone-500 transition"
                 >
                   {f.username}
                 </button>
@@ -512,7 +512,7 @@ export default function Dashboard() {
             {outgoingRequests.map((r) => (
               <span
                 key={`out-${r.id}`}
-                className="text-xs bg-white border border-dashed border-stone-300 rounded-full px-3 py-1 text-stone-400"
+                className="text-xs bg-white dark:bg-stone-900 border border-dashed border-stone-300 dark:border-stone-700 rounded-full px-3 py-1 text-stone-400 dark:text-stone-500"
               >
                 {r.username} (requested)
               </span>
@@ -521,24 +521,24 @@ export default function Dashboard() {
         )}
 
         {loading ? (
-          <p className="text-stone-400 text-sm">Loading...</p>
+          <p className="text-stone-400 dark:text-stone-500 text-sm">Loading...</p>
         ) : pacts.length === 0 ? (
-          <p className="text-stone-400 text-sm">No pacts yet. Create one to get started.</p>
+          <p className="text-stone-400 dark:text-stone-500 text-sm">No pacts yet. Create one to get started.</p>
         ) : (
           <div className="space-y-3">
             {pacts.map((pact) => (
               <div
                 key={pact.id}
-                className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between"
+                className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-4 flex items-center justify-between"
               >
                 <div>
-                  <p className="font-medium text-stone-900">
+                  <p className="font-medium text-stone-900 dark:text-stone-100">
                     {pact.habit_description}
                     {pact.is_group ? (
-                      <span className="ml-2 text-xs text-stone-400 font-normal">(group)</span>
+                      <span className="ml-2 text-xs text-stone-400 dark:text-stone-500 font-normal">(group)</span>
                     ) : null}
                   </p>
-                  <p className="text-sm text-stone-500">
+                  <p className="text-sm text-stone-500 dark:text-stone-400">
                     {pact.frequency_per_week}x/week &middot; stake {pact.stake_amount} &middot;{' '}
                     {statusBadge(pact)}
                   </p>
@@ -553,7 +553,7 @@ export default function Dashboard() {
                     </button>
                     <button
                       onClick={() => handleReject(pact.id)}
-                      className="bg-stone-200 text-stone-700 text-sm font-medium rounded-lg px-3 py-1.5 hover:bg-stone-300 transition"
+                      className="bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200 text-sm font-medium rounded-lg px-3 py-1.5 hover:bg-stone-300 dark:hover:bg-stone-600 transition"
                     >
                       Reject
                     </button>
@@ -561,7 +561,7 @@ export default function Dashboard() {
                 ) : (
                   <Link
                     to={`/pacts/${pact.id}`}
-                    className="text-stone-900 text-sm font-medium underline"
+                    className="text-stone-900 dark:text-stone-100 text-sm font-medium underline"
                   >
                     Open
                   </Link>

@@ -33,25 +33,25 @@ export default function TimelinePage() {
   }, [id]);
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <NavBar />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <Link to={`/pacts/${id}`} className="text-sm text-stone-500 underline">
+        <Link to={`/pacts/${id}`} className="text-sm text-stone-500 dark:text-stone-400 underline">
           &larr; Back to pact
         </Link>
 
-        <h1 className="text-xl font-semibold text-stone-900 mt-4 mb-6">History</h1>
+        <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100 mt-4 mb-6">History</h1>
 
         <div className="space-y-3">
           {events.map((event) => (
             <div
               key={event.id}
-              className="bg-white border border-stone-200 rounded-lg px-4 py-3 flex items-center justify-between"
+              className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg px-4 py-3 flex items-center justify-between"
             >
-              <span className="text-sm text-stone-900">
+              <span className="text-sm text-stone-900 dark:text-stone-100">
                 {eventLabels[event.event_type] || event.event_type}
               </span>
-              <span className="text-xs text-stone-400">
+              <span className="text-xs text-stone-400 dark:text-stone-500">
                 {new Date(event.created_at + 'Z').toLocaleString()}
               </span>
             </div>

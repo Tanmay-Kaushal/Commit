@@ -1,15 +1,18 @@
 const cron = require('node-cron');
-const { DateTime } = require('luxon');
 const db = require('./db');
-const { settleCycle } = require('./cycles');
+const { settleCycle, notifyCycleOutcome } = require('./cycles');
+const devTime = require('./devTime');
 
 // Looks at every active cycle whose end time has passed, decides who
 // completed it and who didn't (any number of participants), settles the
 // stakes between them, and closes the cycle out. processed_at guards
 // against double-processing if this job somehow runs twice for the same
 // cycle (e.g. after a crash + restart).
+//
+// Compares against devTime.now() rather than the real clock, so Developer
+// Mode's simulated time can push cycles past their end without waiting.
 function reconcileCycles(io) {
-  const now = DateTime.now().toUTC().toISO();
+  const now = devTime.now().toUTC().toISO();
 
   const endedCycles = db.prepare(`
     SELECT * FROM habit_cycles
@@ -27,6 +30,7 @@ function reconcileCycles(io) {
         pactId: pact.id,
         type: status === 'completed' ? 'cycle_completed' : 'cycle_forfeited',
       });
+      notifyCycleOutcome(io, pact, status);
     }
   }
 

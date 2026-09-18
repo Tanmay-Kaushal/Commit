@@ -173,6 +173,13 @@ if (!hasIsGroup) {
   db.exec("ALTER TABLE habit_pacts ADD COLUMN is_group INTEGER NOT NULL DEFAULT 0");
 }
 
+// v1.2: Developer Mode toggle, per user, gating who's allowed to move the
+// simulated clock used for cycle testing.
+const hasDevMode = userColumns.some((col) => col.name === 'dev_mode_enabled');
+if (!hasDevMode) {
+  db.exec('ALTER TABLE users ADD COLUMN dev_mode_enabled INTEGER NOT NULL DEFAULT 0');
+}
+
 // Backfill pact_participants for any pacts created before that table
 // existed, so old pacts keep working under the new participant-based logic.
 const legacyPacts = db.prepare(`

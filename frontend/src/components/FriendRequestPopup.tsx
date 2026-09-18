@@ -1,31 +1,27 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
-import type { PactInviteEvent } from '../api/socket';
+import type { FriendRequestEvent } from '../api/socket';
 
-// A small centered modal that pops up live (over sockets, no reload) when
-// someone invites the current user to a pact. Accept/reject right here,
-// or dismiss to decide later from the dashboard.
-export default function PactInvitePopup({
-  invite,
+// Same modal pattern as PactInvitePopup — pops up live (over sockets, no
+// reload) when someone sends the current user a friend request.
+export default function FriendRequestPopup({
+  request,
   onDone,
 }: {
-  invite: PactInviteEvent;
+  request: FriendRequestEvent;
   onDone: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
 
   async function handleAccept() {
     setBusy(true);
     setError('');
     try {
-      await client.post(`/pacts/${invite.pactId}/accept`);
+      await client.post(`/friends/requests/${request.id}/accept`);
       onDone();
-      navigate(`/pacts/${invite.pactId}`);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Could not accept invite');
+      setError(err.response?.data?.error || 'Could not accept request');
       setBusy(false);
     }
   }
@@ -34,10 +30,10 @@ export default function PactInvitePopup({
     setBusy(true);
     setError('');
     try {
-      await client.post(`/pacts/${invite.pactId}/reject`);
+      await client.post(`/friends/requests/${request.id}/reject`);
       onDone();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Could not decline invite');
+      setError(err.response?.data?.error || 'Could not decline request');
       setBusy(false);
     }
   }
@@ -46,19 +42,11 @@ export default function PactInvitePopup({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 dark:bg-black/60 px-4">
       <div className="w-full max-w-sm bg-white dark:bg-stone-900 rounded-xl shadow-lg border border-stone-200 dark:border-stone-800 p-6">
         <p className="text-xs font-medium text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-1">
-          {invite.isGroup ? 'Group pact invite' : 'Pact invite'}
+          Friend request
         </p>
-        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-3">
-          {invite.from.email} invited you to a pact
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-4">
+          {request.from.email} wants to be your friend
         </h2>
-
-        <div className="bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg p-4 space-y-1 mb-4">
-          <p className="text-sm text-stone-900 dark:text-stone-100 font-medium">{invite.habitDescription}</p>
-          <p className="text-sm text-stone-500 dark:text-stone-400">
-            {invite.frequencyPerWeek}x/week &middot; stake {invite.stakeAmount} &middot; every{' '}
-            {invite.cycleLengthDays} day{invite.cycleLengthDays === 1 ? '' : 's'}
-          </p>
-        </div>
 
         {error && <p className="text-red-600 dark:text-red-400 text-sm mb-3">{error}</p>}
 

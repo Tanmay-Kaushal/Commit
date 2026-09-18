@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('../auth');
 const { logEvent } = require('../events');
-const { getOrCreateCurrentCycle, settleCycle } = require('../cycles');
+const { getOrCreateCurrentCycle, settleCycle, notifyCycleOutcome } = require('../cycles');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -131,12 +131,15 @@ router.post('/:pactId/dispute/resolve', (req, res) => {
     UPDATE disputes SET status = ?, resolved_by = ?, resolved_at = datetime('now') WHERE id = ?
   `).run(approve ? 'approved' : 'rejected', req.user.id, dispute.id);
 
+  const io = req.app.get('io');
+  let settleResult = null;
+
   if (approve) {
     try {
       db.prepare(`INSERT INTO check_ins (cycle_id, user_id, status) VALUES (?, ?, 'disputed_approved')`)
         .run(cycle.id, userId);
     } catch (err) {}
-    settleCycle(cycle, pact);
+    settleResult = settleCycle(cycle, pact);
   }
 
   logEvent({
@@ -146,8 +149,10 @@ router.post('/:pactId/dispute/resolve', (req, res) => {
     payload: { userId: Number(userId), resolvedBy: req.user.id, approved: !!approve },
   });
 
-  const io = req.app.get('io');
   io.to(`pact:${pact.id}`).emit('pact_update', { pactId: pact.id, type: 'dispute_resolved' });
+  if (settleResult) {
+    notifyCycleOutcome(io, pact, settleResult.status);
+  }
 
   const updatedCycle = db.prepare('SELECT * FROM habit_cycles WHERE id = ?').get(cycle.id);
   res.json({ ok: true, status: updatedCycle.status });

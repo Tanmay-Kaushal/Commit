@@ -8,7 +8,10 @@ let sharedSocket: Socket | null = null;
 
 function getSocket() {
   if (!sharedSocket) {
-    sharedSocket = io(API_URL);
+    // An empty API_URL means "same origin as the page" (production, single
+    // service) — socket.io-client wants that expressed as no argument at
+    // all, not an empty string.
+    sharedSocket = API_URL ? io(API_URL) : io();
   }
   return sharedSocket;
 }
@@ -45,15 +48,27 @@ export type PactInviteEvent = {
   from: { id: number; email: string };
 };
 
+export type FriendRequestEvent = {
+  id: number;
+  from: { id: number; email: string };
+};
+
+export type PactCompletedEvent = {
+  pactId: number;
+  habitDescription: string;
+};
+
 // Joins a room keyed to the current user so the server can push things
-// like a live pact-invite popup or a friend-request notification without
-// the page needing to poll or reload.
+// like a live pact-invite popup, a friend-request notification, or a
+// "you completed the pact" celebration without the page needing to poll
+// or reload.
 export function useUserNotifications(
   userId: number | undefined,
   handlers: {
     onPactInvite?: (data: PactInviteEvent) => void;
-    onFriendRequest?: () => void;
+    onFriendRequest?: (data: FriendRequestEvent) => void;
     onFriendRequestAccepted?: () => void;
+    onPactCompleted?: (data: PactCompletedEvent) => void;
   }
 ) {
   const handlersRef = useRef(handlers);
@@ -67,21 +82,26 @@ export function useUserNotifications(
     function handlePactInvite(data: PactInviteEvent) {
       handlersRef.current.onPactInvite?.(data);
     }
-    function handleFriendRequest() {
-      handlersRef.current.onFriendRequest?.();
+    function handleFriendRequest(data: FriendRequestEvent) {
+      handlersRef.current.onFriendRequest?.(data);
     }
     function handleFriendRequestAccepted() {
       handlersRef.current.onFriendRequestAccepted?.();
+    }
+    function handlePactCompleted(data: PactCompletedEvent) {
+      handlersRef.current.onPactCompleted?.(data);
     }
 
     socket.on('pact_invite', handlePactInvite);
     socket.on('friend_request', handleFriendRequest);
     socket.on('friend_request_accepted', handleFriendRequestAccepted);
+    socket.on('pact_completed', handlePactCompleted);
 
     return () => {
       socket.off('pact_invite', handlePactInvite);
       socket.off('friend_request', handleFriendRequest);
       socket.off('friend_request_accepted', handleFriendRequestAccepted);
+      socket.off('pact_completed', handlePactCompleted);
     };
   }, [userId]);
 }

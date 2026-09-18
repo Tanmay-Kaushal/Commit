@@ -90,20 +90,20 @@ export default function Signup() {
   }
 
   function usernameHint() {
-    if (usernameStatus === 'checking') return <span className="text-stone-400">Checking...</span>;
-    if (usernameStatus === 'available') return <span className="text-emerald-600">Available</span>;
-    if (usernameStatus === 'taken') return <span className="text-red-600">Already taken</span>;
+    if (usernameStatus === 'checking') return <span className="text-stone-400 dark:text-stone-500">Checking...</span>;
+    if (usernameStatus === 'available') return <span className="text-emerald-600 dark:text-emerald-400">Available</span>;
+    if (usernameStatus === 'taken') return <span className="text-red-600 dark:text-red-400">Already taken</span>;
     if (usernameStatus === 'invalid') {
-      return <span className="text-red-600">3-20 characters: letters, numbers, underscores</span>;
+      return <span className="text-red-600 dark:text-red-400">3-20 characters: letters, numbers, underscores</span>;
     }
     return null;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-stone-200 p-8">
-        <h1 className="text-2xl font-semibold text-stone-900 mb-1">Commit</h1>
-        <p className="text-stone-500 text-sm mb-6">Create your account</p>
+    <div className="min-h-screen flex items-center justify-center bg-stone-50 dark:bg-stone-950 px-4">
+      <div className="w-full max-w-sm bg-white dark:bg-stone-900 rounded-xl shadow-sm border border-stone-200 dark:border-stone-800 p-8">
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100 mb-1">Commit</h1>
+        <p className="text-stone-500 dark:text-stone-400 text-sm mb-6">Create your account</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
@@ -111,7 +111,7 @@ export default function Signup() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900"
+            className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900 dark:focus:ring-stone-100"
             required
           />
           <input
@@ -119,7 +119,7 @@ export default function Signup() {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900"
+            className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900 dark:focus:ring-stone-100"
             required
             minLength={6}
           />
@@ -132,31 +132,31 @@ export default function Signup() {
                 setUsernameTouched(true);
                 setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
               }}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900"
+              className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900 dark:focus:ring-stone-100"
             />
             <p className="text-xs mt-1">
               {usernameHint() || (
-                <span className="text-stone-400">
+                <span className="text-stone-400 dark:text-stone-500">
                   We'll suggest one from your email — feel free to change it
                 </span>
               )}
             </p>
           </div>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-400 dark:text-stone-500">
             Timezone detected as {detectedTimezone}
           </p>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
           <button
             type="submit"
-            className="w-full bg-stone-900 text-white rounded-lg py-2 text-sm font-medium hover:bg-stone-700 transition"
+            className="w-full bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-lg py-2 text-sm font-medium hover:bg-stone-700 dark:hover:bg-stone-300 transition"
           >
             Sign up
           </button>
         </form>
 
-        <p className="text-sm text-stone-500 mt-4 text-center">
+        <p className="text-sm text-stone-500 dark:text-stone-400 mt-4 text-center">
           Already have an account?{' '}
-          <Link to="/login" className="text-stone-900 font-medium underline">
+          <Link to="/login" className="text-stone-900 dark:text-stone-100 font-medium underline">
             Log in
           </Link>
         </p>

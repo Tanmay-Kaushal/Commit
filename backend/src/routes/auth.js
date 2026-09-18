@@ -59,10 +59,19 @@ router.post('/signup', async (req, res) => {
     INSERT INTO users (email, username, password_hash, timezone) VALUES (?, ?, ?, ?)
   `).run(email, finalUsername, passwordHash, timezone || 'UTC');
 
-  const user = db.prepare('SELECT id, email, username, timezone FROM users WHERE id = ?').get(result.lastInsertRowid);
+  const user = db.prepare('SELECT id, email, username, timezone, dev_mode_enabled FROM users WHERE id = ?').get(result.lastInsertRowid);
   const token = signToken(user);
 
-  res.json({ user, token });
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      timezone: user.timezone,
+      devModeEnabled: !!user.dev_mode_enabled,
+    },
+    token,
+  });
 });
 
 router.post('/login', async (req, res) => {
@@ -83,20 +92,26 @@ router.post('/login', async (req, res) => {
 
   const token = signToken(user);
   res.json({
-    user: { id: user.id, email: user.email, username: user.username, timezone: user.timezone },
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      timezone: user.timezone,
+      devModeEnabled: !!user.dev_mode_enabled,
+    },
     token,
   });
 });
 
 router.get('/me', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT id, email, username, timezone FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT id, email, username, timezone, dev_mode_enabled FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
+  res.json({ ...user, devModeEnabled: !!user.dev_mode_enabled });
 });
 
 // Edit basic profile details. Email is intentionally not editable here.
 router.put('/me', requireAuth, (req, res) => {
-  const { username, timezone } = req.body;
+  const { username, timezone, devModeEnabled } = req.body;
 
   let finalUsername = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id).username;
 
@@ -114,13 +129,16 @@ router.put('/me', requireAuth, (req, res) => {
   }
 
   const finalTimezone = timezone && timezone.trim() ? timezone.trim() : undefined;
+  const finalDevMode = devModeEnabled === undefined ? undefined : (devModeEnabled ? 1 : 0);
 
   db.prepare(`
-    UPDATE users SET username = ?, timezone = COALESCE(?, timezone) WHERE id = ?
-  `).run(finalUsername, finalTimezone || null, req.user.id);
+    UPDATE users
+    SET username = ?, timezone = COALESCE(?, timezone), dev_mode_enabled = COALESCE(?, dev_mode_enabled)
+    WHERE id = ?
+  `).run(finalUsername, finalTimezone || null, finalDevMode ?? null, req.user.id);
 
-  const user = db.prepare('SELECT id, email, username, timezone FROM users WHERE id = ?').get(req.user.id);
-  res.json(user);
+  const user = db.prepare('SELECT id, email, username, timezone, dev_mode_enabled FROM users WHERE id = ?').get(req.user.id);
+  res.json({ ...user, devModeEnabled: !!user.dev_mode_enabled });
 });
 
 module.exports = router;
