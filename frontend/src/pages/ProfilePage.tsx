@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import NavBar from '../components/NavBar';
 import client from '../api/client';
@@ -24,10 +24,25 @@ export default function ProfilePage() {
   // simulated clock forward, so multi-day pact cycles can be reconciled
   // without actually waiting for days to pass.
   const [devModeEnabled, setDevModeEnabled] = useState(!!user?.devModeEnabled);
+  const [devToggleBusy, setDevToggleBusy] = useState(false);
   const [devBusy, setDevBusy] = useState(false);
   const [devError, setDevError] = useState('');
   const [simulatedTime, setSimulatedTime] = useState<string | null>(null);
   const [timeInput, setTimeInput] = useState('');
+
+  // The auth user (persisted to localStorage) is the source of truth. If it
+  // ever changes — including from an in-flight PUT resolving after a newer
+  // one — the checkbox follows it, instead of drifting out of sync with
+  // whatever was last optimistically set locally.
+  useEffect(() => {
+    setDevModeEnabled(!!user?.devModeEnabled);
+  }, [user?.devModeEnabled]);
+
+  // Guards against out-of-order responses: if two toggle requests are ever
+  // in flight (shouldn't happen now that the checkbox disables itself while
+  // busy, but keep this as a second line of defense), only the response to
+  // the most recently issued request is allowed to touch state.
+  const toggleRequestId = useRef(0);
 
   async function loadDevStatus() {
     try {
@@ -61,11 +76,19 @@ export default function ProfilePage() {
   async function handleToggleDevMode(next: boolean) {
     setDevError('');
     setDevModeEnabled(next);
+    setDevToggleBusy(true);
+    const requestId = ++toggleRequestId.current;
     try {
       await updateProfile({ devModeEnabled: next });
+      // A newer toggle has since been issued — that request now owns the
+      // checkbox's state, so don't touch anything on this one's resolution.
+      if (requestId !== toggleRequestId.current) return;
     } catch (err: any) {
+      if (requestId !== toggleRequestId.current) return;
       setDevModeEnabled(!next);
       setDevError(err.response?.data?.error || 'Could not update developer mode');
+    } finally {
+      if (requestId === toggleRequestId.current) setDevToggleBusy(false);
     }
   }
 
@@ -181,6 +204,7 @@ export default function ProfilePage() {
             <input
               type="checkbox"
               checked={devModeEnabled}
+              disabled={devToggleBusy}
               onChange={(e) => handleToggleDevMode(e.target.checked)}
             />
             Developer mode
