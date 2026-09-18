@@ -27,9 +27,19 @@ const eventLabels: Record<string, string> = {
 export default function TimelinePage() {
   const { id } = useParams();
   const [events, setEvents] = useState<Event[]>([]);
+  const [loadError, setLoadError] = useState('');
+
+  function load() {
+    setLoadError('');
+    client
+      .get(`/events/${id}`)
+      .then((res) => setEvents(res.data))
+      .catch((err) => setLoadError(err.response?.data?.error || 'Could not load history. Try refreshing the page.'));
+  }
 
   useEffect(() => {
-    client.get(`/events/${id}`).then((res) => setEvents(res.data));
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   return (
@@ -41,6 +51,15 @@ export default function TimelinePage() {
         </Link>
 
         <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100 mt-4 mb-6">History</h1>
+
+        {loadError && (
+          <p className="text-red-600 dark:text-red-400 text-sm mb-4">
+            {loadError}{' '}
+            <button onClick={load} className="underline">
+              Retry
+            </button>
+          </p>
+        )}
 
         <div className="space-y-3">
           {events.map((event) => (

@@ -11,5 +11,8 @@ backend/dev.db-wal
 
 # Env files with secrets — .env.example (if you add one) stays tracked
 .env
+.env.*
 backend/.env
+backend/.env.*
 frontend/.env
+frontend/.env.*

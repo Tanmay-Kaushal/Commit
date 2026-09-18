@@ -17,5 +17,23 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+// A 401 means the stored token is missing, expired, or was signed under a
+// secret the server no longer recognizes (e.g. after a redeploy). Without
+// this, every subsequent request keeps silently failing while the UI still
+// thinks it's logged in — pages get stuck on "Loading..." forever with no
+// indication why. Clear the stale session and send the user back to log in
+// instead of leaving the app hanging.
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && window.location.pathname !== '/login') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default client;
 export { API_URL };

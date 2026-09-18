@@ -43,6 +43,7 @@ export default function Dashboard() {
   const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // pact form state
   const [habitDescription, setHabitDescription] = useState('');
@@ -64,20 +65,36 @@ export default function Dashboard() {
 
   async function loadPacts() {
     setLoading(true);
-    const res = await client.get('/pacts');
-    setPacts(res.data);
-    setLoading(false);
+    setLoadError('');
+    try {
+      const res = await client.get('/pacts');
+      setPacts(res.data);
+    } catch (err: any) {
+      setLoadError(err.response?.data?.error || 'Could not load your pacts. Try refreshing the page.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadFriends() {
-    const res = await client.get('/friends');
-    setFriends(res.data);
+    try {
+      const res = await client.get('/friends');
+      setFriends(res.data);
+    } catch {
+      // Friends/requests failures aren't fatal to the page — the pacts
+      // list above already surfaces a visible error if the session itself
+      // is the problem (e.g. an expired token).
+    }
   }
 
   async function loadRequests() {
-    const res = await client.get('/friends/requests');
-    setIncomingRequests(res.data.incoming);
-    setOutgoingRequests(res.data.outgoing);
+    try {
+      const res = await client.get('/friends/requests');
+      setIncomingRequests(res.data.incoming);
+      setOutgoingRequests(res.data.outgoing);
+    } catch {
+      // See loadFriends — non-fatal.
+    }
   }
 
   useEffect(() => {
@@ -522,6 +539,13 @@ export default function Dashboard() {
 
         {loading ? (
           <p className="text-stone-400 dark:text-stone-500 text-sm">Loading...</p>
+        ) : loadError ? (
+          <div className="text-sm text-red-600 dark:text-red-400">
+            {loadError}{' '}
+            <button onClick={loadPacts} className="underline">
+              Retry
+            </button>
+          </div>
         ) : pacts.length === 0 ? (
           <p className="text-stone-400 dark:text-stone-500 text-sm">No pacts yet. Create one to get started.</p>
         ) : (

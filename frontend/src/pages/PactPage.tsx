@@ -75,9 +75,16 @@ export default function PactPage() {
   const [data, setData] = useState<PactDetail | null>(null);
   const [error, setError] = useState('');
 
+  const [loadError, setLoadError] = useState('');
+
   const load = useCallback(async () => {
-    const res = await client.get(`/pacts/${pactId}`);
-    setData(res.data);
+    try {
+      const res = await client.get(`/pacts/${pactId}`);
+      setData(res.data);
+      setLoadError('');
+    } catch (err: any) {
+      setLoadError(err.response?.data?.error || 'Could not load this pact. Try refreshing the page.');
+    }
   }, [pactId]);
 
   useEffect(() => {
@@ -131,7 +138,18 @@ export default function PactPage() {
     return (
       <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
         <NavBar />
-        <div className="max-w-3xl mx-auto px-4 py-8 text-stone-400 dark:text-stone-500 text-sm">Loading...</div>
+        <div className="max-w-3xl mx-auto px-4 py-8 text-sm">
+          {loadError ? (
+            <p className="text-red-600 dark:text-red-400">
+              {loadError}{' '}
+              <button onClick={load} className="underline">
+                Retry
+              </button>
+            </p>
+          ) : (
+            <p className="text-stone-400 dark:text-stone-500">Loading...</p>
+          )}
+        </div>
       </div>
     );
   }
