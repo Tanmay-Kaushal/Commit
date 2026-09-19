@@ -16,6 +16,9 @@ Socket.IO, node-cron, Luxon, JWT auth
 
 Requires **Node 22.5 or newer**.
 
+## Website
+`https://commit-0691.up.railway.app`
+
 ## Running it locally
 
 You'll need two terminals open — one for the backend, one for the frontend.
@@ -44,34 +47,6 @@ Runs on `http://localhost:5173`.
 Open that URL in your browser once both servers are running. In this
 two-terminal setup the frontend talks to the backend over
 `VITE_API_URL` (`frontend/.env`), same as before.
-
-## Deploying (Railway, one service)
-
-This version builds into a single deployable unit: `npm run build` (at the
-repo root) builds the frontend straight into `backend/public`, and the
-backend serves both the API and that compiled frontend from one Express
-process on one port. That means one Railway service, with **Root
-Directory** left as the repo root — no per-service root-directory tracing,
-no separate frontend/backend services to wire together.
-
-1. Create one Railway service from this repo (root directory = repo root).
-2. Railway's Nixpacks builder picks up `railway.json` automatically:
-   - Build: `npm run build`
-   - Start: `npm start`
-3. Set environment variables on that service:
-   - `JWT_SECRET` — required, any long random string.
-   - `DB_PATH` — optional; point it at a mounted Railway Volume (e.g.
-     `/data/dev.db`) so the SQLite database survives redeploys. Without it,
-     the database lives on the container's ephemeral filesystem and resets
-     on every deploy.
-   - `PORT` is set automatically by Railway — don't set it yourself.
-   - You do **not** need `VITE_API_URL`: since the frontend is served by the
-     same process as the API, requests default to same-origin in
-     production.
-
-Local development still runs backend and frontend as two separate
-processes (see above) — that split doesn't change, only how the built app
-is deployed.
 
 ## How to use it
 
