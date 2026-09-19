@@ -17,7 +17,7 @@ Socket.IO, node-cron, Luxon, JWT auth
 Requires **Node 22.5 or newer**.
 
 ## Website
-`https://commit-0691.up.railway.app`
+https://commit-0691.up.railway.app
 
 ## Running it locally
 
