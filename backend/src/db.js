@@ -1,22 +1,40 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
+const fs = require('fs');
 
-// Using Node's built-in SQLite module instead of a third-party package like
-// better-sqlite3 on purpose — better-sqlite3 needs a native C++ build step
-// (node-gyp + a C++ compiler), which fails out of the box on a lot of
-// Windows machines unless Visual Studio's C++ tools are installed. node:sqlite
-// ships with Node itself (22.5+), so `npm install` never needs to compile
-// anything. It's still marked "experimental" by Node, but the API surface
-// used here is stable.
-// DB_PATH lets this point at a mounted Railway Volume in production (e.g.
-// /data/dev.db) so the database survives redeploys — Railway's regular
-// filesystem is wiped on every deploy. Defaults to the local dev.db file
-// for local development.
+// Refuse to start rather than silently lose data on redeploy.
+if (!process.env.DB_PATH && process.env.NODE_ENV === 'production') {
+  console.error('[db] FATAL: DB_PATH not set in production. Refusing to start.');
+  process.exit(1);
+}
+
 const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'dev.db');
+
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
+const dbExistedBefore = fs.existsSync(dbPath);
 const db = new DatabaseSync(dbPath);
 
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
+db.exec('PRAGMA busy_timeout = 5000');
+db.exec('PRAGMA wal_autocheckpoint = 1000');
+db.exec('PRAGMA cache_size = -4000'); // ~4MB
+
+// Cache prepared statements by SQL text — avoids recompiling on every call.
+const statementCache = new Map();
+const rawPrepare = db.prepare.bind(db);
+db.prepare = function prepareCached(sql) {
+  let stmt = statementCache.get(sql);
+  if (!stmt) {
+    stmt = rawPrepare(sql);
+    statementCache.set(sql, stmt);
+  }
+  return stmt;
+};
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -25,60 +43,15 @@ db.exec(`
     username TEXT UNIQUE,
     password_hash TEXT NOT NULL,
     timezone TEXT NOT NULL DEFAULT 'UTC',
+    email_verified INTEGER NOT NULL DEFAULT 0,
+    verification_code_hash TEXT,
+    verification_expires_at TEXT,
+    verification_attempts INTEGER NOT NULL DEFAULT 0,
+    verification_last_sent_at TEXT,
+    invite_code TEXT UNIQUE,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  CREATE TABLE IF NOT EXISTS habit_pacts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    creator_id INTEGER NOT NULL,
-    partner_id INTEGER,
-    partner_email TEXT NOT NULL,
-    habit_description TEXT NOT NULL,
-    frequency_per_week INTEGER NOT NULL,
-    stake_amount INTEGER NOT NULL,
-    cycle_length_days INTEGER NOT NULL DEFAULT 7,
-    status TEXT NOT NULL DEFAULT 'pending_invite',
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (creator_id) REFERENCES users(id),
-    FOREIGN KEY (partner_id) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS habit_cycles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    pact_id INTEGER NOT NULL,
-    cycle_start TEXT NOT NULL,
-    cycle_end TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    processed_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (pact_id) REFERENCES habit_pacts(id),
-    UNIQUE(pact_id, cycle_start)
-  );
-
-  CREATE TABLE IF NOT EXISTS check_ins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cycle_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    checked_in_at TEXT NOT NULL DEFAULT (datetime('now')),
-    status TEXT NOT NULL DEFAULT 'on_time',
-    FOREIGN KEY (cycle_id) REFERENCES habit_cycles(id),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(cycle_id, user_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    pact_id INTEGER NOT NULL,
-    cycle_id INTEGER,
-    event_type TEXT NOT NULL,
-    payload TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (pact_id) REFERENCES habit_pacts(id),
-    FOREIGN KEY (cycle_id) REFERENCES habit_cycles(id)
-  );
-
-  -- One row per direction: if A adds B, that's a row (A, B). Only created
-  -- (both directions at once) once a friend_request has been accepted.
   CREATE TABLE IF NOT EXISTS friendships (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -89,8 +62,6 @@ db.exec(`
     UNIQUE(user_id, friend_id)
   );
 
-  -- A pending ask to become friends. Accepting one writes both directions
-  -- into friendships; rejecting just closes it out.
   CREATE TABLE IF NOT EXISTS friend_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     requester_id INTEGER NOT NULL,
@@ -103,10 +74,22 @@ db.exec(`
     UNIQUE(requester_id, addressee_id)
   );
 
-  -- Every participant in a pact, including the creator, gets a row here.
-  -- This is what lets a pact have more than one partner: check-ins,
-  -- acceptance, and settlement all key off this table instead of the
-  -- legacy creator_id/partner_id columns on habit_pacts.
+  CREATE TABLE IF NOT EXISTS habit_pacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    creator_id INTEGER NOT NULL,
+    habit_description TEXT NOT NULL,
+    stake_amount INTEGER NOT NULL,
+    scheduled_days INTEGER NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    is_group INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending_invite',
+    invite_code TEXT UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (creator_id) REFERENCES users(id)
+  );
+
   CREATE TABLE IF NOT EXISTS pact_participants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pact_id INTEGER NOT NULL,
@@ -120,91 +103,132 @@ db.exec(`
     UNIQUE(pact_id, email)
   );
 
-  -- Per-participant, per-cycle money movement once a cycle closes.
-  -- amount is positive for someone who completed and received a share of
-  -- the pooled stakes, negative for someone who forfeited and owes their
-  -- stake. settled_* flags let either the payer or a receiver confirm the
-  -- money actually changed hands.
-  CREATE TABLE IF NOT EXISTS cycle_settlements (
+  CREATE TABLE IF NOT EXISTS pact_days (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cycle_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    completed INTEGER NOT NULL,
-    amount REAL NOT NULL DEFAULT 0,
-    settled INTEGER NOT NULL DEFAULT 0,
-    settled_by INTEGER,
+    pact_id INTEGER NOT NULL,
+    scheduled_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    processed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (cycle_id) REFERENCES habit_cycles(id),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(cycle_id, user_id)
+    FOREIGN KEY (pact_id) REFERENCES habit_pacts(id),
+    UNIQUE(pact_id, scheduled_date)
   );
 
-  -- A participant claiming "I did complete this cycle, I just forgot to
-  -- log it" after being marked as forfeited. Any other active participant
-  -- can resolve it.
+  CREATE TABLE IF NOT EXISTS check_ins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pact_day_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    checked_in_at TEXT NOT NULL DEFAULT (datetime('now')),
+    status TEXT NOT NULL DEFAULT 'on_time',
+    FOREIGN KEY (pact_day_id) REFERENCES pact_days(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(pact_day_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pact_id INTEGER NOT NULL,
+    pact_day_id INTEGER,
+    event_type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (pact_id) REFERENCES habit_pacts(id),
+    FOREIGN KEY (pact_day_id) REFERENCES pact_days(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS day_settlements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pact_day_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    completed INTEGER NOT NULL,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    settled INTEGER NOT NULL DEFAULT 0,
+    settled_by INTEGER,
+    settled_at TEXT,
+    last_reminded_on TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (pact_day_id) REFERENCES pact_days(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(pact_day_id, user_id)
+  );
+
   CREATE TABLE IF NOT EXISTS disputes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cycle_id INTEGER NOT NULL,
+    pact_day_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
     resolved_by INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     resolved_at TEXT,
-    FOREIGN KEY (cycle_id) REFERENCES habit_cycles(id),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(cycle_id, user_id)
+    FOREIGN KEY (pact_day_id) REFERENCES pact_days(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS invite_emails_sent (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_id INTEGER NOT NULL,
+    recipient_email TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (sender_id) REFERENCES users(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_habit_pacts_status ON habit_pacts(status);
+  CREATE INDEX IF NOT EXISTS idx_pact_days_pact_status_date ON pact_days(pact_id, status, scheduled_date);
+  CREATE INDEX IF NOT EXISTS idx_pact_participants_user ON pact_participants(user_id);
+  CREATE INDEX IF NOT EXISTS idx_pact_participants_pact_status ON pact_participants(pact_id, status);
+  CREATE INDEX IF NOT EXISTS idx_day_settlements_user_settled ON day_settlements(user_id, settled);
+  CREATE INDEX IF NOT EXISTS idx_events_pact_created ON events(pact_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_friend_requests_addressee_status ON friend_requests(addressee_id, status);
+  CREATE INDEX IF NOT EXISTS idx_disputes_pact_day ON disputes(pact_day_id);
+  CREATE INDEX IF NOT EXISTS idx_users_unverified ON users(email_verified, created_at);
+  CREATE INDEX IF NOT EXISTS idx_invite_emails_sender_created ON invite_emails_sent(sender_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_invite_emails_recipient_created ON invite_emails_sent(recipient_email, created_at);
+  CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
 `);
 
-// Lightweight migration for anyone running against an older dev.db that
-// doesn't have the username column yet (SQLite has no "ADD COLUMN IF NOT
-// EXISTS", so we check first).
-const userColumns = db.prepare("PRAGMA table_info(users)").all();
-const hasUsername = userColumns.some((col) => col.name === 'username');
-if (!hasUsername) {
-  db.exec('ALTER TABLE users ADD COLUMN username TEXT');
+// Versioned schema migrations — future changes ALTER, never DROP.
+const CURRENT_SCHEMA_VERSION = 1;
+const schemaVersion = db.prepare('PRAGMA user_version').get().user_version;
+if (schemaVersion < CURRENT_SCHEMA_VERSION) {
+  db.exec(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
 }
 
-// Same idea for is_group on habit_pacts, for anyone running against an
-// older dev.db.
-const pactColumns = db.prepare("PRAGMA table_info(habit_pacts)").all();
-const hasIsGroup = pactColumns.some((col) => col.name === 'is_group');
-if (!hasIsGroup) {
-  db.exec("ALTER TABLE habit_pacts ADD COLUMN is_group INTEGER NOT NULL DEFAULT 0");
-}
+const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+console.log(
+  `[db] using ${dbPath} (${dbExistedBefore ? 'existing file found' : 'created new file'}), schema v${CURRENT_SCHEMA_VERSION}, ${userCount} user(s)`
+);
 
-// v1.2: Developer Mode toggle, per user, gating who's allowed to move the
-// simulated clock used for cycle testing.
-const hasDevMode = userColumns.some((col) => col.name === 'dev_mode_enabled');
-if (!hasDevMode) {
-  db.exec('ALTER TABLE users ADD COLUMN dev_mode_enabled INTEGER NOT NULL DEFAULT 0');
-}
-
-// Backfill pact_participants for any pacts created before that table
-// existed, so old pacts keep working under the new participant-based logic.
-const legacyPacts = db.prepare(`
-  SELECT * FROM habit_pacts
-  WHERE id NOT IN (SELECT DISTINCT pact_id FROM pact_participants)
-`).all();
-for (const pact of legacyPacts) {
-  const creator = db.prepare('SELECT email FROM users WHERE id = ?').get(pact.creator_id);
+function checkpointAndClose() {
   try {
-    db.prepare(`
-      INSERT INTO pact_participants (pact_id, user_id, email, status, is_creator)
-      VALUES (?, ?, ?, 'active', 1)
-    `).run(pact.id, pact.creator_id, creator?.email || '');
-  } catch (err) {}
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  } catch (err) {
+    console.error('[db] checkpoint on shutdown failed:', err.message);
+  }
+  db.close();
+}
+
+function transaction(fn) {
+  db.exec('BEGIN');
   try {
-    db.prepare(`
-      INSERT INTO pact_participants (pact_id, user_id, email, status, is_creator)
-      VALUES (?, ?, ?, ?, 0)
-    `).run(
-      pact.id,
-      pact.partner_id,
-      pact.partner_email,
-      pact.partner_id ? 'active' : 'pending_invite'
-    );
-  } catch (err) {}
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 }
 
 module.exports = db;
+module.exports.checkpointAndClose = checkpointAndClose;
+module.exports.transaction = transaction;

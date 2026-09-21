@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('../auth');
+const { notifyUser } = require('../push');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -50,7 +51,7 @@ router.post('/requests', (req, res) => {
 
   const value = identifier.trim().toLowerCase();
   const addressee = db.prepare(
-    'SELECT id, email, username FROM users WHERE email = ? OR username = ?'
+    'SELECT id, email, username FROM users WHERE (email = ? OR username = ?) AND email_verified = 1'
   ).get(value, value);
 
   if (!addressee) {
@@ -84,10 +85,13 @@ router.post('/requests', (req, res) => {
     `).run(req.user.id, addressee.id);
 
     const io = req.app.get('io');
-    io.to(`user:${addressee.id}`).emit('friend_request', {
-      id: result.lastInsertRowid,
-      from: { id: req.user.id, email: req.user.email },
-    });
+    notifyUser(
+      io,
+      addressee.id,
+      'friend_request',
+      { id: result.lastInsertRowid, from: { id: req.user.id, email: req.user.email } },
+      { title: 'New friend request', body: `${req.user.username || req.user.email} wants to be friends on Commit.`, url: '/dashboard' }
+    );
 
     res.json({ status: 'pending', requestId: result.lastInsertRowid });
   } catch (err) {
@@ -152,9 +156,7 @@ router.post('/requests/:id/reject', (req, res) => {
   res.json({ ok: true });
 });
 
-// Remove a friend. Deletes both directions of the friendship, plus any
-// old resolved friend_requests between the two, so sending a fresh
-// request later isn't blocked by the old UNIQUE(requester, addressee) row.
+// Deletes both directions plus old friend_requests, so re-requesting later works.
 router.delete('/:id', (req, res) => {
   const friendId = Number(req.params.id);
 

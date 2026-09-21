@@ -1,23 +1,25 @@
 # Commit
 
-A habit accountability app for two people. You and a partner each commit to
-a habit with a stake attached. Every cycle (a week, by default), a scheduled
-job checks whether you both kept up your end, and marks the cycle completed
-or forfeited. Live status updates between partners, a dispute flow if you
-forget to log a check-in, and a full history view of everything that's
-happened on a pact.
+A habit accountability app for two (or more) people. You and a partner each
+commit to a habit over a fixed date range, on chosen days of the week, with
+a stake attached. A scheduled job settles each scheduled day automatically:
+everyone who checked in splits the stake of everyone who didn't. Live
+updates between partners, push notifications when the app isn't open, a
+dispute flow if you forget to log a check-in, shareable invite links, and a
+full history view of everything that's happened on a pact.
 
 ## Tech stack
 
 **Backend:** Node.js, Express, SQLite (via Node's built-in `node:sqlite`),
-Socket.IO, node-cron, Luxon, JWT auth
+Socket.IO, Web Push, node-cron, Luxon, JWT auth, Brevo (transactional email)
 
 **Frontend:** React, TypeScript, Vite, Tailwind CSS, React Router
 
 Requires **Node 22.5 or newer**.
 
 ## Website
-https://commit-0691.up.railway.app
+
+https://commit-0691.up.railway.app/
 
 ## Running it locally
 
@@ -32,7 +34,13 @@ npm start
 ```
 
 Runs on `http://localhost:4000`. A local SQLite database file is created
-automatically on first run — nothing else to set up.
+automatically on first run.
+
+Without `BREVO_API_KEY`/`MAIL_FROM` set (see `.env`), email verification
+codes are printed to the backend's console instead of emailed — signup
+still works end to end for local development. Same for push notifications:
+without `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`, the "Enable notifications"
+control simply won't appear.
 
 **2. Frontend**
 
@@ -46,41 +54,61 @@ Runs on `http://localhost:5173`.
 
 Open that URL in your browser once both servers are running. In this
 two-terminal setup the frontend talks to the backend over
-`VITE_API_URL` (`frontend/.env`), same as before.
+`VITE_API_URL` (`frontend/.env.development`).
 
 ## How to use it
 
-1. **Sign up.** Create an account with your email and a password.
+1. **Sign up and verify.** Create an account with your email and a
+   password, then enter the 6-digit code sent to that email. You can't log
+   in until it's verified.
 
 2. **Create a pact.** From the dashboard, click "New pact" and fill in the
-   habit you're committing to, how many times a week you need to do it,
-   how much is at stake, how long each cycle should run, and your partner's
-   email.
+   habit, which days of the week, the date range, and how much is at stake
+   per missed day. A partner is optional at creation — invite one now, or
+   share the pact's link later.
 
-3. **Get your partner to accept.** Your partner needs their own account
-   (they can sign up separately). Once they log in, the pact will show up
-   on their dashboard with an "Accept" button.
+3. **Invite people.**
+   - By email or username, from the "New pact" form or a pact's "+ Add
+     participant".
+   - By link: "Send pact link" (on the pact page, creator only) — anyone
+     who opens it and is logged in gets the same accept/reject popup as a
+     direct invite; logged out, they're sent to log in first and land back
+     on it after.
+   - "Invite friends on Commit" (Profile page) generates your own personal
+     link — anyone who opens it becomes your friend automatically.
+   - If someone doesn't have an account yet, sending them a friend request
+     offers "Invite to Commit" instead, which emails them your invite link.
 
-4. **Check in.** Once a pact is active, either of you can hit "Check in"
-   from the pact page during the current cycle. You'll see your partner's
-   status update live — no need to refresh.
+4. **A pact activates** once its start date arrives and at least one
+   partner has accepted — not before, and it's never auto-cancelled if no
+   one has by then; it just keeps waiting. The creator can cancel it
+   manually from the pact's "⋯" menu.
 
-5. **Cycles close automatically.** A background job checks periodically
-   whether each cycle has ended, and marks it completed or forfeited based
-   on who checked in.
+5. **Check in.** Once a pact is active, everyone can hit "Check in" from
+   the pact page on any scheduled day. Status updates live — no refresh
+   needed.
 
-6. **Dispute a forfeit.** If a cycle gets marked forfeited but you actually
-   did the habit and just forgot to log it, you can raise a dispute from the
-   pact page. Your partner can then approve or reject it.
+6. **Days settle automatically.** A background job checks every minute
+   whether a scheduled day has passed, and settles it: anyone who checked
+   in splits the stake of anyone who didn't.
 
-7. **View history.** Every pact has a "View full history" link showing a
-   timeline of everything that's happened — check-ins, cycle outcomes,
-   disputes, all in order.
+7. **Dispute a forfeit.** If a day gets marked missed but you actually did
+   the habit and just forgot to log it, raise a dispute from the pact page
+   — another participant can approve or reject it (capped at 3 attempts).
+
+8. **Notifications.** Live in-app popups for invites, friend requests,
+   completed days, debts owed, and payments received — and if you enable
+   notifications (Profile page), the same events show as a system
+   notification when Commit isn't open or visible.
+
+9. **View history.** Every pact has a "View full history" link — check-ins,
+   settlements, disputes, all in order.
 
 ## Notes
 
-This was built as a personal project, not a production app — there's no
-password reset, rate limiting, or email verification, and the "frequency
-per week" field isn't fully enforced yet (a cycle currently just checks
-whether you checked in at all, not how many times). Good enough to run
-locally and demo, not meant to be deployed as-is.
+Built as a personal project — not hardened for large-scale production use,
+but the essentials (data durability, memory footprint, real email
+verification) have had a real pass. See `backend/src/db.js` for the SQLite
+tuning (prepared-statement caching, indexes, WAL limits, versioned schema
+migrations, graceful shutdown) and `backend/src/mailer.js` / `push.js` for
+the email/push integrations.

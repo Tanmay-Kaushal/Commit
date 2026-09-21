@@ -1,21 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import client from '../api/client';
 import {
   useUserNotifications,
   type PactInviteEvent,
   type FriendRequestEvent,
-  type PactCompletedEvent,
+  type PactDayCompletedEvent,
+  type DebtReminderEvent,
+  type PaymentReceivedEvent,
 } from '../api/socket';
 import PactInvitePopup from './PactInvitePopup';
 import FriendRequestPopup from './FriendRequestPopup';
 import PactCompletedPopup from './PactCompletedPopup';
+import DebtReminderPopup from './DebtReminderPopup';
+import PaymentReceivedPopup from './PaymentReceivedPopup';
 
 type QueueItem =
   | { kind: 'pact_invite'; data: PactInviteEvent }
   | { kind: 'friend_request'; data: FriendRequestEvent }
-  | { kind: 'pact_completed'; data: PactCompletedEvent };
+  | { kind: 'pact_day_completed'; data: PactDayCompletedEvent }
+  | { kind: 'debt_reminder'; data: DebtReminderEvent }
+  | { kind: 'payment_received'; data: PaymentReceivedEvent };
 
 export default function NavBar() {
   const { user, logout } = useAuth();
@@ -26,8 +33,37 @@ export default function NavBar() {
   useUserNotifications(user?.id, {
     onPactInvite: (invite) => setQueue((q) => [...q, { kind: 'pact_invite', data: invite }]),
     onFriendRequest: (request) => setQueue((q) => [...q, { kind: 'friend_request', data: request }]),
-    onPactCompleted: (data) => setQueue((q) => [...q, { kind: 'pact_completed', data }]),
+    onPactDayCompleted: (data) => setQueue((q) => [...q, { kind: 'pact_day_completed', data }]),
+    onDebtReminder: (data) => setQueue((q) => [...q, { kind: 'debt_reminder', data }]),
+    onPaymentReceived: (data) => setQueue((q) => [...q, { kind: 'payment_received', data }]),
   });
+
+  // Catch up on any debt reminder still due, in case it was missed while offline.
+  useEffect(() => {
+    if (!user?.id) return;
+    client
+      .get('/debts')
+      .then((res) => {
+        const due = (res.data.owedByMe || []).filter((d: any) => d.shouldNagNow);
+        if (due.length > 0) {
+          setQueue((q) => [
+            ...q,
+            ...due.map((d: any) => ({
+              kind: 'debt_reminder' as const,
+              data: {
+                settlementId: d.settlementId,
+                pactId: d.pactId,
+                habitDescription: d.habitDescription,
+                scheduledDate: d.scheduledDate,
+                amount: d.amount,
+              },
+            })),
+          ]);
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   function dismiss() {
     setQueue((q) => q.slice(1));
@@ -75,7 +111,9 @@ export default function NavBar() {
 
       {current?.kind === 'pact_invite' && <PactInvitePopup invite={current.data} onDone={dismiss} />}
       {current?.kind === 'friend_request' && <FriendRequestPopup request={current.data} onDone={dismiss} />}
-      {current?.kind === 'pact_completed' && <PactCompletedPopup event={current.data} onDone={dismiss} />}
+      {current?.kind === 'pact_day_completed' && <PactCompletedPopup event={current.data} onDone={dismiss} />}
+      {current?.kind === 'debt_reminder' && <DebtReminderPopup debt={current.data} onDone={dismiss} />}
+      {current?.kind === 'payment_received' && <PaymentReceivedPopup event={current.data} onDone={dismiss} />}
     </>
   );
 }

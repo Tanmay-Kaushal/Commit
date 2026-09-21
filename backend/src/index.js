@@ -1,6 +1,7 @@
-require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
+// Resolved relative to this file, not process.cwd() (run as `node backend/src/index.js` from repo root).
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -11,8 +12,13 @@ const pactRoutes = require('./routes/pacts');
 const checkinRoutes = require('./routes/checkins');
 const eventRoutes = require('./routes/events');
 const friendRoutes = require('./routes/friends');
-const devRoutes = require('./routes/dev');
-const { startCronJob } = require('./cronJob');
+const debtRoutes = require('./routes/debts');
+const inviteRoutes = require('./routes/invites');
+const pushRoutes = require('./routes/push');
+const db = require('./db');
+const { verifyUser } = require('./auth');
+const { getFriendInvitePreview, getPactInvitePreview } = require('./invitePreview');
+const { startCronJob, stopCronJob } = require('./cronJob');
 
 const app = express();
 app.use(cors());
@@ -25,17 +31,16 @@ const io = new Server(server, {
 app.set('io', io);
 
 io.on('connection', (socket) => {
-  // Frontend joins a room per pact it's viewing so updates only go to
-  // people who actually care about that pact.
   socket.on('join_pact', (pactId) => {
     socket.join(`pact:${pactId}`);
   });
 
-  // Frontend also joins a room keyed to its own user id right after login,
-  // so we can push things like "you were invited to a pact" or "you got a
-  // friend request" straight to that person without a page reload.
-  socket.on('join_user', (userId) => {
-    socket.join(`user:${userId}`);
+  // Verifies the token server-side so a client can't join someone else's room.
+  socket.on('join_user', (token) => {
+    try {
+      const user = verifyUser(token);
+      socket.join(`user:${user.id}`);
+    } catch (err) {}
   });
 });
 
@@ -44,21 +49,55 @@ app.use('/api/pacts', pactRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/friends', friendRoutes);
-app.use('/api/dev', devRoutes);
+app.use('/api/debts', debtRoutes);
+app.use('/api/invites', inviteRoutes);
+app.use('/api/push', pushRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-// The frontend's `npm run build` (see vite.config.ts) outputs straight into
-// backend/public, so a single Express process — and a single Railway
-// service — can serve both the API and the compiled app. This directory
-// only exists after that build has run (e.g. `npm run build` at the repo
-// root), so local API-only development without it keeps working fine.
+// backend/public exists after `npm run build` (see vite.config.ts).
 const publicDir = path.join(__dirname, '..', 'public');
 if (fs.existsSync(publicDir)) {
+  // Link previews need real <meta> tags in the initial HTML (crawlers
+  // don't run JS) — these two routes splice them in for /i and /p links.
+  const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  function withMetaTags(title, description) {
+    const tags = [
+      `<meta property="og:title" content="${escapeAttr(title)}">`,
+      `<meta property="og:description" content="${escapeAttr(description)}">`,
+      `<meta property="og:type" content="website">`,
+      `<meta name="twitter:card" content="summary">`,
+      `<meta name="twitter:title" content="${escapeAttr(title)}">`,
+      `<meta name="twitter:description" content="${escapeAttr(description)}">`,
+    ].join('\n    ');
+    return indexHtml.replace('</head>', `    ${tags}\n  </head>`);
+  }
+
+  app.get('/i/:code', (req, res) => {
+    const preview = getFriendInvitePreview(req.params.code);
+    if (!preview) return res.send(indexHtml);
+    const name = preview.username || preview.email;
+    res.send(withMetaTags(`${name} has invited you on Commit`, 'Join them on Commit — habit accountability with a partner and a stake.'));
+  });
+
+  app.get('/p/:code', (req, res) => {
+    const preview = getPactInvitePreview(req.params.code);
+    if (!preview) return res.send(indexHtml);
+    const name = preview.from?.username || preview.from?.email || 'Someone';
+    res.send(withMetaTags(
+      `${name} has invited you to a pact on Commit`,
+      `${preview.habitDescription} — stake ${preview.stakeAmount} per missed day.`
+    ));
+  });
+
   app.use(express.static(publicDir));
 
-  // Anything that isn't an API route falls through to the SPA's index.html
-  // so client-side routes like /pacts/3 resolve correctly on a hard refresh.
+  // SPA fallback so client-side routes survive a hard refresh.
   app.get(/^(?!\/api\/).*/, (req, res) => {
     res.sendFile(path.join(publicDir, 'index.html'));
   });
@@ -69,3 +108,29 @@ server.listen(PORT, () => {
   console.log(`Commit backend running on http://localhost:${PORT}`);
   startCronJob(io);
 });
+
+// Graceful shutdown: stop new work, finish in-flight requests, checkpoint DB.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal} received, closing down gracefully...`);
+
+  stopCronJob();
+  io.close();
+
+  server.close(() => {
+    db.checkpointAndClose();
+    console.log('[shutdown] done');
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    console.error('[shutdown] timed out waiting for connections to close — forcing exit');
+    db.checkpointAndClose();
+    process.exit(1);
+  }, 10000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

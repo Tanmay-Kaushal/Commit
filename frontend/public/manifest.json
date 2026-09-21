@@ -1,0 +1,12 @@
+{
+  "name": "Commit",
+  "short_name": "Commit",
+  "description": "Habit accountability with a partner and a stake.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f6f5f3",
+  "theme_color": "#1c1917",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

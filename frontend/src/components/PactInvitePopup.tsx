@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import type { PactInviteEvent } from '../api/socket';
+import { describeMask } from '../weekdays';
 
-// A small centered modal that pops up live (over sockets, no reload) when
-// someone invites the current user to a pact. Accept/reject right here,
-// or dismiss to decide later from the dashboard.
 export default function PactInvitePopup({
   invite,
   onDone,
@@ -55,8 +53,10 @@ export default function PactInvitePopup({
         <div className="bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg p-4 space-y-1 mb-4">
           <p className="text-sm text-stone-900 dark:text-stone-100 font-medium">{invite.habitDescription}</p>
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            {invite.frequencyPerWeek}x/week &middot; stake {invite.stakeAmount} &middot; every{' '}
-            {invite.cycleLengthDays} day{invite.cycleLengthDays === 1 ? '' : 's'}
+            {describeMask(invite.scheduledDays)} &middot; stake {invite.stakeAmount} per missed day
+          </p>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            {invite.startDate} &rarr; {invite.endDate}
           </p>
         </div>
 

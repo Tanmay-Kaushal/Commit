@@ -82,8 +82,8 @@ export default function Signup() {
     }
 
     try {
-      await signup(email, password, detectedTimezone, username || undefined);
-      navigate('/dashboard');
+      const { email: verifyEmail } = await signup(email, password, detectedTimezone, username || undefined);
+      navigate('/verify-email', { state: { email: verifyEmail } });
     } catch (err: any) {
       setError(err.response?.data?.error || 'Signup failed');
     }

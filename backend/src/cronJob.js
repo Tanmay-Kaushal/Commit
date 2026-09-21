@@ -1,49 +1,66 @@
 const cron = require('node-cron');
+const path = require('path');
+const fs = require('fs');
+const { reconcileDue } = require('./pactDays');
 const db = require('./db');
-const { settleCycle, notifyCycleOutcome } = require('./cycles');
-const devTime = require('./devTime');
+const { UNVERIFIED_TTL_HOURS } = require('./verification');
 
-// Looks at every active cycle whose end time has passed, decides who
-// completed it and who didn't (any number of participants), settles the
-// stakes between them, and closes the cycle out. processed_at guards
-// against double-processing if this job somehow runs twice for the same
-// cycle (e.g. after a crash + restart).
-//
-// Compares against devTime.now() rather than the real clock, so Developer
-// Mode's simulated time can push cycles past their end without waiting.
-function reconcileCycles(io) {
-  const now = devTime.now().toUTC().toISO();
-
-  const endedCycles = db.prepare(`
-    SELECT * FROM habit_cycles
-    WHERE status = 'active' AND cycle_end <= ? AND processed_at IS NULL
-  `).all(now);
-
-  for (const cycle of endedCycles) {
-    const pact = db.prepare('SELECT * FROM habit_pacts WHERE id = ?').get(cycle.pact_id);
-    if (!pact || pact.status !== 'active') continue;
-
-    const { status } = settleCycle(cycle, pact);
-
-    if (io) {
-      io.to(`pact:${pact.id}`).emit('pact_update', {
-        pactId: pact.id,
-        type: status === 'completed' ? 'cycle_completed' : 'cycle_forfeited',
-      });
-      notifyCycleOutcome(io, pact, status);
-    }
-  }
-
-  if (endedCycles.length > 0) {
-    console.log(`[cron] reconciled ${endedCycles.length} cycle(s) at ${now}`);
+// Every minute: activate due pacts, settle past-due days, send reminders,
+// clear out never-verified signups.
+function tick(io) {
+  const { activated, settledCount, reminded } = reconcileDue(io);
+  const expiredSignups = clearExpiredUnverifiedAccounts();
+  if (activated || settledCount || reminded || expiredSignups) {
+    console.log(`[cron] activated=${activated} settled=${settledCount} reminders=${reminded} expiredSignups=${expiredSignups}`);
   }
 }
+
+function clearExpiredUnverifiedAccounts() {
+  const result = db.prepare(`
+    DELETE FROM users WHERE email_verified = 0 AND created_at < datetime('now', ?)
+  `).run(`-${UNVERIFIED_TTL_HOURS} hours`);
+  return result.changes;
+}
+
+// Once a day: a VACUUM INTO snapshot next to the live DB, 7 days kept.
+const BACKUP_RETENTION_DAYS = 7;
+
+function backupDatabase() {
+  const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'dev.db');
+  const backupDir = path.join(path.dirname(dbPath), 'backups');
+  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const backupPath = path.join(backupDir, `backup-${stamp}.db`);
+
+  try {
+    if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
+    db.prepare(`VACUUM INTO ?`).run(backupPath);
+
+    const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 24 * 3600 * 1000;
+    for (const name of fs.readdirSync(backupDir)) {
+      const filePath = path.join(backupDir, name);
+      if (fs.statSync(filePath).mtimeMs < cutoff) fs.unlinkSync(filePath);
+    }
+
+    console.log(`[backup] wrote ${backupPath}`);
+  } catch (err) {
+    console.error('[backup] failed:', err.message);
+  }
+}
+
+let minuteTask = null;
+let dailyTask = null;
 
 function startCronJob(io) {
-  // Runs every minute — fine for local dev/demo. In production you'd probably
-  // run this every 15-30 min via a real job queue instead of node-cron.
-  cron.schedule('* * * * *', () => reconcileCycles(io));
-  console.log('[cron] cycle reconciliation job scheduled (every minute)');
+  minuteTask = cron.schedule('* * * * *', () => tick(io));
+  dailyTask = cron.schedule('0 3 * * *', () => backupDatabase());
+  console.log('[cron] reconciliation job scheduled (every minute), backup scheduled (daily at 03:00)');
 }
 
-module.exports = { startCronJob, reconcileCycles };
+function stopCronJob() {
+  if (minuteTask) { minuteTask.stop(); minuteTask = null; }
+  if (dailyTask) { dailyTask.stop(); dailyTask = null; }
+}
+
+module.exports = { startCronJob, stopCronJob, tick, backupDatabase };

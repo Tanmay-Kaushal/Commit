@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { takePendingInvite, pendingInvitePath } from '../pendingInvite';
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -14,8 +15,13 @@ export default function Login() {
     setError('');
     try {
       await login(identifier, password);
-      navigate('/dashboard');
+      const pending = takePendingInvite();
+      navigate(pending ? pendingInvitePath(pending) : '/dashboard');
     } catch (err: any) {
+      if (err.response?.data?.needsVerification) {
+        navigate('/verify-email', { state: { email: err.response.data.email } });
+        return;
+      }
       setError(err.response?.data?.error || 'Login failed');
     }
   }

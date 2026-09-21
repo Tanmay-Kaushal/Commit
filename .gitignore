@@ -9,6 +9,9 @@ backend/dev.db
 backend/dev.db-shm
 backend/dev.db-wal
 
+# Daily VACUUM INTO snapshots (see cronJob.js backupDatabase)
+backend/backups/
+
 # Env files with secrets — .env.example (if you add one) stays tracked
 .env
 .env.*
