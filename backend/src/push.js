@@ -1,16 +1,37 @@
 const webpush = require('web-push');
+const fs = require('fs');
+const path = require('path');
 const db = require('./db');
+const { persistentDir } = require('./persistentDir');
 
-function pushConfigured() {
-  return !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+// Uses VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY if set; otherwise generates a
+// pair and persists it to the volume (if attached) so push subscriptions
+// survive restarts. No volume and no env vars = push just stays disabled
+// (unlike DB_PATH/JWT_SECRET, this isn't fatal — push is optional).
+function resolveVapidKeys() {
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    return { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY };
+  }
+
+  const keyPath = path.join(persistentDir(), '.vapid-keys.json');
+  if (fs.existsSync(keyPath)) return JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+
+  if (!process.env.RAILWAY_VOLUME_MOUNT_PATH && process.env.NODE_ENV === 'production') return null;
+
+  const keys = webpush.generateVAPIDKeys();
+  fs.writeFileSync(keyPath, JSON.stringify(keys), { mode: 0o600 });
+  console.log('[push] generated and persisted new VAPID keys');
+  return keys;
 }
 
-if (pushConfigured()) {
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-  );
+const vapidKeys = resolveVapidKeys();
+
+function pushConfigured() {
+  return !!vapidKeys;
+}
+
+if (vapidKeys) {
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@example.com', vapidKeys.publicKey, vapidKeys.privateKey);
 }
 
 // Sends a push to every subscribed device. sw.js decides whether to
@@ -47,4 +68,4 @@ function notifyUser(io, userId, socketEvent, socketPayload, pushPayload) {
   sendPushToUser(userId, pushPayload).catch((err) => console.error('[push] notifyUser failed:', err.message));
 }
 
-module.exports = { pushConfigured, sendPushToUser, notifyUser };
+module.exports = { pushConfigured, sendPushToUser, notifyUser, vapidPublicKey: () => vapidKeys?.publicKey || null };

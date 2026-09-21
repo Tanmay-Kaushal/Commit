@@ -1,12 +1,33 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const db = require('./db');
+const { persistentDir } = require('./persistentDir');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+// Uses JWT_SECRET if set; otherwise generates one and persists it to the
+// attached volume so it survives restarts. Without a volume in
+// production, a fresh secret every restart would log everyone out —
+// refuse to start instead.
+function resolveJwtSecret() {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
 
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
-  console.error('[auth] FATAL: JWT_SECRET is not set in production. Refusing to start.');
-  process.exit(1);
+  const hasVolume = !!process.env.RAILWAY_VOLUME_MOUNT_PATH;
+  if (process.env.NODE_ENV === 'production' && !hasVolume) {
+    console.error('[auth] FATAL: no JWT_SECRET and no volume to persist an auto-generated one. Attach a Volume, or set JWT_SECRET manually.');
+    process.exit(1);
+  }
+
+  const secretPath = path.join(persistentDir(), '.jwt-secret');
+  if (fs.existsSync(secretPath)) return fs.readFileSync(secretPath, 'utf8').trim();
+
+  const generated = crypto.randomBytes(48).toString('base64');
+  fs.writeFileSync(secretPath, generated, { mode: 0o600 });
+  console.log('[auth] generated and persisted a new JWT_SECRET');
+  return generated;
 }
+
+const JWT_SECRET = resolveJwtSecret();
 
 function signToken(user) {
   return jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });

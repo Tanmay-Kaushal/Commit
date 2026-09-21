@@ -1,15 +1,12 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth } = require('../auth');
-const { pushConfigured } = require('../push');
+const { pushConfigured, vapidPublicKey } = require('../push');
 
 const router = express.Router();
 
-// Public — the frontend needs this before the person has even logged in
-// to know whether to offer the "enable notifications" control at all.
 router.get('/vapid-public-key', (req, res) => {
-  if (!pushConfigured()) return res.json({ key: null });
-  res.json({ key: process.env.VAPID_PUBLIC_KEY });
+  res.json({ key: pushConfigured() ? vapidPublicKey() : null });
 });
 
 router.use(requireAuth);

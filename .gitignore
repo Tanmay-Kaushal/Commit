@@ -12,6 +12,10 @@ backend/dev.db-wal
 # Daily VACUUM INTO snapshots (see cronJob.js backupDatabase)
 backend/backups/
 
+# Auto-generated secrets (see persistentDir.js) — real ones on the volume in production
+backend/.jwt-secret
+backend/.vapid-keys.json
+
 # Env files with secrets — .env.example (if you add one) stays tracked
 .env
 .env.*

@@ -1,14 +1,17 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const fs = require('fs');
+const { persistentDir } = require('./persistentDir');
 
-// Refuse to start rather than silently lose data on redeploy.
-if (!process.env.DB_PATH && process.env.NODE_ENV === 'production') {
-  console.error('[db] FATAL: DB_PATH not set in production. Refusing to start.');
+// Refuse to start rather than silently lose data on redeploy. A volume
+// attached in the Railway dashboard sets RAILWAY_VOLUME_MOUNT_PATH
+// automatically, so DB_PATH itself doesn't need setting by hand.
+if (!process.env.DB_PATH && !process.env.RAILWAY_VOLUME_MOUNT_PATH && process.env.NODE_ENV === 'production') {
+  console.error('[db] FATAL: no DB_PATH and no volume attached. Attach a Volume in the Railway dashboard, or set DB_PATH manually.');
   process.exit(1);
 }
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'dev.db');
+const dbPath = process.env.DB_PATH || path.join(persistentDir(), 'dev.db');
 
 const dbDir = path.dirname(dbPath);
 if (!fs.existsSync(dbDir)) {
