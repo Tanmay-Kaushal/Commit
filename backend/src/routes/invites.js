@@ -4,12 +4,8 @@ const { requireAuth } = require('../auth');
 const { logEvent } = require('../events');
 const { getOrCreateUserInviteCode, getOrCreatePactInviteCode } = require('../inviteCodes');
 const { getFriendInvitePreview, getPactInvitePreview } = require('../invitePreview');
-const { mailerConfigured, sendInviteEmail } = require('../mailer');
 
 const router = express.Router();
-
-const EMAIL_INVITE_DAILY_LIMIT = 10;
-const EMAIL_INVITE_RECIPIENT_COOLDOWN_HOURS = 24;
 
 function appUrl() {
   return (process.env.APP_URL || 'http://localhost:4000').replace(/\/$/, '');
@@ -125,47 +121,6 @@ router.post('/pact/:code/claim', requireAuth, (req, res) => {
     from: preview.from,
     alreadyParticipant: false,
   });
-});
-
-// ---- "Invite to Commit" — email someone who has no account yet ----
-
-router.post('/email', requireAuth, async (req, res) => {
-  const email = (req.body.email || '').trim().toLowerCase();
-  if (!email || !email.includes('@')) return res.status(400).json({ error: 'Enter a valid email address' });
-
-  const existingUser = db.prepare('SELECT id FROM users WHERE email = ? AND email_verified = 1').get(email);
-  if (existingUser) return res.status(409).json({ error: 'That email already has a Commit account — send a friend request instead' });
-
-  if (!mailerConfigured()) return res.status(502).json({ error: 'Email is not configured on this server' });
-
-  const sentToday = db.prepare(`
-    SELECT COUNT(*) c FROM invite_emails_sent WHERE sender_id = ? AND created_at > datetime('now', '-24 hours')
-  `).get(req.user.id).c;
-  if (sentToday >= EMAIL_INVITE_DAILY_LIMIT) {
-    return res.status(429).json({ error: `You can send up to ${EMAIL_INVITE_DAILY_LIMIT} invite emails a day — try again tomorrow` });
-  }
-
-  const recentlyInvited = db.prepare(`
-    SELECT id FROM invite_emails_sent WHERE recipient_email = ? AND created_at > datetime('now', ?)
-  `).get(email, `-${EMAIL_INVITE_RECIPIENT_COOLDOWN_HOURS} hours`);
-  if (recentlyInvited) {
-    return res.status(429).json({ error: 'An invite was already sent to that address recently — try again later' });
-  }
-
-  const inviter = db.prepare('SELECT username, email FROM users WHERE id = ?').get(req.user.id);
-  const code = getOrCreateUserInviteCode(req.user.id);
-  const inviteUrl = `${appUrl()}/i/${code}`;
-
-  try {
-    await sendInviteEmail(email, inviter.username || inviter.email, inviteUrl);
-  } catch (err) {
-    console.error('[invites] failed to send invite email:', err.message);
-    return res.status(502).json({ error: 'Could not send the invite email — try again in a moment' });
-  }
-
-  db.prepare('INSERT INTO invite_emails_sent (sender_id, recipient_email) VALUES (?, ?)').run(req.user.id, email);
-
-  res.json({ ok: true });
 });
 
 module.exports = router;

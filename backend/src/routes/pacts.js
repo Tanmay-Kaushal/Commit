@@ -16,7 +16,7 @@ const DATE_RULE = /^\d{4}-\d{2}-\d{2}$/;
 function resolveIdentifiers(identifiers, requesterId) {
   const resolved = [];
   for (const identifier of identifiers) {
-    const existingUser = db.prepare('SELECT id, email FROM users WHERE (email = ? OR username = ?) AND email_verified = 1').get(identifier, identifier);
+    const existingUser = db.prepare('SELECT id, email FROM users WHERE email = ? OR username = ?').get(identifier, identifier);
     const email = existingUser ? existingUser.email : identifier;
     if (!existingUser && !email.includes('@')) {
       return { status: 404, error: `No user found with the username "${identifier}", and it doesn't look like an email to invite` };

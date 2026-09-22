@@ -103,6 +103,10 @@ if (fs.existsSync(publicDir)) {
   });
 }
 
+if (!process.env.GOOGLE_CLIENT_ID) {
+  console.warn('[auth] WARNING: GOOGLE_CLIENT_ID not set — nobody can sign in.');
+}
+
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
   console.log(`Commit backend running on http://localhost:${PORT}`);

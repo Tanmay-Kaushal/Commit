@@ -44,13 +44,8 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
     username TEXT UNIQUE,
-    password_hash TEXT NOT NULL,
+    google_id TEXT UNIQUE,
     timezone TEXT NOT NULL DEFAULT 'UTC',
-    email_verified INTEGER NOT NULL DEFAULT 0,
-    verification_code_hash TEXT,
-    verification_expires_at TEXT,
-    verification_attempts INTEGER NOT NULL DEFAULT 0,
-    verification_last_sent_at TEXT,
     invite_code TEXT UNIQUE,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -177,14 +172,6 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
-  CREATE TABLE IF NOT EXISTS invite_emails_sent (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sender_id INTEGER NOT NULL,
-    recipient_email TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (sender_id) REFERENCES users(id)
-  );
-
   CREATE INDEX IF NOT EXISTS idx_habit_pacts_status ON habit_pacts(status);
   CREATE INDEX IF NOT EXISTS idx_pact_days_pact_status_date ON pact_days(pact_id, status, scheduled_date);
   CREATE INDEX IF NOT EXISTS idx_pact_participants_user ON pact_participants(user_id);
@@ -193,15 +180,44 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_events_pact_created ON events(pact_id, created_at);
   CREATE INDEX IF NOT EXISTS idx_friend_requests_addressee_status ON friend_requests(addressee_id, status);
   CREATE INDEX IF NOT EXISTS idx_disputes_pact_day ON disputes(pact_day_id);
-  CREATE INDEX IF NOT EXISTS idx_users_unverified ON users(email_verified, created_at);
-  CREATE INDEX IF NOT EXISTS idx_invite_emails_sender_created ON invite_emails_sent(sender_id, created_at);
-  CREATE INDEX IF NOT EXISTS idx_invite_emails_recipient_created ON invite_emails_sent(recipient_email, created_at);
   CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
 `);
 
-// Versioned schema migrations — future changes ALTER, never DROP.
-const CURRENT_SCHEMA_VERSION = 1;
+// Versioned schema migrations — future changes ALTER/rebuild, never lose data.
+const CURRENT_SCHEMA_VERSION = 2;
 const schemaVersion = db.prepare('PRAGMA user_version').get().user_version;
+
+// v2: password/email-verification columns replaced with google_id (Google
+// sign-in only now). Rebuilds the users table, keeping every existing row
+// (id, email, username, timezone, invite_code, created_at) — an existing
+// account just needs to sign in with Google using the same email to link
+// up; their pacts/friendships (which key off user id) are untouched.
+if (schemaVersion < 2) {
+  const cols = db.prepare("PRAGMA table_info(users)").all();
+  if (cols.some((c) => c.name === 'password_hash')) {
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        username TEXT UNIQUE,
+        google_id TEXT UNIQUE,
+        timezone TEXT NOT NULL DEFAULT 'UTC',
+        invite_code TEXT UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO users_new (id, email, username, timezone, invite_code, created_at)
+        SELECT id, email, username, timezone, invite_code, created_at FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+      DROP TABLE IF EXISTS invite_emails_sent;
+      DROP INDEX IF EXISTS idx_users_unverified;
+    `);
+    db.exec('PRAGMA foreign_keys = ON');
+    console.log('[db] migrated users table to schema v2 (Google sign-in)');
+  }
+}
+
 if (schemaVersion < CURRENT_SCHEMA_VERSION) {
   db.exec(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
 }

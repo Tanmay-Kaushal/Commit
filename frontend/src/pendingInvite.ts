@@ -1,4 +1,4 @@
-// Carries an invite link across the login/signup detour.
+// Carries an invite link across the /login detour.
 const KEY = 'pendingInviteClaim';
 const TTL_MS = 7 * 24 * 3600 * 1000;
 

@@ -3,30 +3,21 @@ const path = require('path');
 const fs = require('fs');
 const { reconcileDue } = require('./pactDays');
 const db = require('./db');
-const { UNVERIFIED_TTL_HOURS } = require('./verification');
+const { persistentDir } = require('./persistentDir');
 
-// Every minute: activate due pacts, settle past-due days, send reminders,
-// clear out never-verified signups.
+// Every minute: activate due pacts, settle past-due days, send reminders.
 function tick(io) {
   const { activated, settledCount, reminded } = reconcileDue(io);
-  const expiredSignups = clearExpiredUnverifiedAccounts();
-  if (activated || settledCount || reminded || expiredSignups) {
-    console.log(`[cron] activated=${activated} settled=${settledCount} reminders=${reminded} expiredSignups=${expiredSignups}`);
+  if (activated || settledCount || reminded) {
+    console.log(`[cron] activated=${activated} settled=${settledCount} reminders=${reminded}`);
   }
-}
-
-function clearExpiredUnverifiedAccounts() {
-  const result = db.prepare(`
-    DELETE FROM users WHERE email_verified = 0 AND created_at < datetime('now', ?)
-  `).run(`-${UNVERIFIED_TTL_HOURS} hours`);
-  return result.changes;
 }
 
 // Once a day: a VACUUM INTO snapshot next to the live DB, 7 days kept.
 const BACKUP_RETENTION_DAYS = 7;
 
 function backupDatabase() {
-  const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'dev.db');
+  const dbPath = process.env.DB_PATH || path.join(persistentDir(), 'dev.db');
   const backupDir = path.join(path.dirname(dbPath), 'backups');
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 

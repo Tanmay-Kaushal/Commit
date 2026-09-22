@@ -51,7 +51,7 @@ router.post('/requests', (req, res) => {
 
   const value = identifier.trim().toLowerCase();
   const addressee = db.prepare(
-    'SELECT id, email, username FROM users WHERE (email = ? OR username = ?) AND email_verified = 1'
+    'SELECT id, email, username FROM users WHERE email = ? OR username = ?'
   ).get(value, value);
 
   if (!addressee) {

@@ -2,7 +2,7 @@ const db = require('./db');
 
 // Public lookups for link previews and claim pages.
 function getFriendInvitePreview(code) {
-  const user = db.prepare('SELECT id, username, email FROM users WHERE invite_code = ? AND email_verified = 1').get(code);
+  const user = db.prepare('SELECT id, username, email FROM users WHERE invite_code = ?').get(code);
   if (!user) return null;
   return { userId: user.id, username: user.username, email: user.email };
 }

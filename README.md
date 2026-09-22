@@ -11,7 +11,8 @@ full history view of everything that's happened on a pact.
 ## Tech stack
 
 **Backend:** Node.js, Express, SQLite (via Node's built-in `node:sqlite`),
-Socket.IO, Web Push, node-cron, Luxon, JWT auth, Brevo (transactional email)
+Socket.IO, Web Push, node-cron, Luxon, JWT auth, Google Sign-In
+(`google-auth-library`)
 
 **Frontend:** React, TypeScript, Vite, Tailwind CSS, React Router
 
@@ -21,46 +22,10 @@ Requires **Node 22.5 or newer**.
 
 https://commit-0691.up.railway.app/
 
-## Running it locally
-
-You'll need two terminals open — one for the backend, one for the frontend.
-
-**1. Backend**
-
-```bash
-cd backend
-npm install
-npm start
-```
-
-Runs on `http://localhost:4000`. A local SQLite database file is created
-automatically on first run.
-
-Without `BREVO_API_KEY`/`MAIL_FROM` set (see `.env`), email verification
-codes are printed to the backend's console instead of emailed — signup
-still works end to end for local development. Same for push notifications:
-without `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`, the "Enable notifications"
-control simply won't appear.
-
-**2. Frontend**
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Runs on `http://localhost:5173`.
-
-Open that URL in your browser once both servers are running. In this
-two-terminal setup the frontend talks to the backend over
-`VITE_API_URL` (`frontend/.env.development`).
-
 ## How to use it
 
-1. **Sign up and verify.** Create an account with your email and a
-   password, then enter the 6-digit code sent to that email. You can't log
-   in until it's verified.
+1. **Sign in with Google.** No separate signup step — signing in with
+   Google creates your account automatically on first use.
 
 2. **Create a pact.** From the dashboard, click "New pact" and fill in the
    habit, which days of the week, the date range, and how much is at stake
@@ -77,7 +42,7 @@ two-terminal setup the frontend talks to the backend over
    - "Invite friends on Commit" (Profile page) generates your own personal
      link — anyone who opens it becomes your friend automatically.
    - If someone doesn't have an account yet, sending them a friend request
-     offers "Invite to Commit" instead, which emails them your invite link.
+     tells you so and offers your invite link to share with them directly.
 
 4. **A pact activates** once its start date arrives and at least one
    partner has accepted — not before, and it's never auto-cancelled if no
@@ -107,8 +72,8 @@ two-terminal setup the frontend talks to the backend over
 ## Notes
 
 Built as a personal project — not hardened for large-scale production use,
-but the essentials (data durability, memory footprint, real email
-verification) have had a real pass. See `backend/src/db.js` for the SQLite
-tuning (prepared-statement caching, indexes, WAL limits, versioned schema
-migrations, graceful shutdown) and `backend/src/mailer.js` / `push.js` for
-the email/push integrations.
+but the essentials (data durability, memory footprint, real auth) have had
+a real pass. See `backend/src/db.js` for the SQLite tuning
+(prepared-statement caching, indexes, WAL limits, versioned schema
+migrations, graceful shutdown) and `backend/src/routes/auth.js` /
+`push.js` for the auth/push integrations.

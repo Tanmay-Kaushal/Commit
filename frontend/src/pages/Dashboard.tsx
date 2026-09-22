@@ -4,6 +4,7 @@ import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useUserNotifications } from '../api/socket';
 import NavBar from '../components/NavBar';
+import InviteLinkButton from '../components/InviteLinkButton';
 import PactFormFields, { isPactFormValid, type PactFormValues } from '../components/PactFormFields';
 import { describeMask, maskToDays } from '../weekdays';
 
@@ -55,9 +56,8 @@ export default function Dashboard() {
   const [showFriendForm, setShowFriendForm] = useState(false);
   const [friendIdentifier, setFriendIdentifier] = useState('');
   const [friendError, setFriendError] = useState('');
-  // Set when a friend request 404s on an email — offers "Invite to Commit".
-  const [noAccountEmail, setNoAccountEmail] = useState<string | null>(null);
-  const [inviteEmailStatus, setInviteEmailStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  // Set when a friend request 404s — offers sharing your invite link instead.
+  const [noAccountFound, setNoAccountFound] = useState(false);
   const [openFriendId, setOpenFriendId] = useState<number | null>(null);
 
   // Per-pact 3-dot menu / inline edit (only one open at a time).
@@ -177,8 +177,7 @@ export default function Dashboard() {
   async function handleAddFriend(e: React.FormEvent) {
     e.preventDefault();
     setFriendError('');
-    setNoAccountEmail(null);
-    setInviteEmailStatus('idle');
+    setNoAccountFound(false);
     const identifier = friendIdentifier.trim();
     try {
       const res = await client.post('/friends/requests', { identifier });
@@ -188,23 +187,7 @@ export default function Dashboard() {
       else loadRequests();
     } catch (err: any) {
       setFriendError(err.response?.data?.error || 'Could not send friend request');
-      // Only email identifiers can be invited, not usernames.
-      if (err.response?.status === 404 && identifier.includes('@')) {
-        setNoAccountEmail(identifier.toLowerCase());
-      }
-    }
-  }
-
-  async function handleInviteToCommit() {
-    if (!noAccountEmail) return;
-    setInviteEmailStatus('sending');
-    setFriendError('');
-    try {
-      await client.post('/invites/email', { email: noAccountEmail });
-      setInviteEmailStatus('sent');
-    } catch (err: any) {
-      setInviteEmailStatus('idle');
-      setFriendError(err.response?.data?.error || 'Could not send the invite');
+      if (err.response?.status === 404) setNoAccountFound(true);
     }
   }
 
@@ -449,15 +432,17 @@ export default function Dashboard() {
                 className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
               />
               {friendError && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{friendError}</p>}
-              {noAccountEmail && (
-                <button
-                  type="button"
-                  onClick={handleInviteToCommit}
-                  disabled={inviteEmailStatus !== 'idle'}
-                  className="text-sm text-stone-900 dark:text-stone-100 underline mt-1 disabled:opacity-40"
-                >
-                  {inviteEmailStatus === 'sent' ? 'Invite sent!' : inviteEmailStatus === 'sending' ? 'Sending...' : `Invite ${noAccountEmail} to Commit`}
-                </button>
+              {noAccountFound && (
+                <div className="mt-2">
+                  <p className="text-xs text-stone-400 dark:text-stone-500 mb-1">
+                    No account found — share your invite link with them instead:
+                  </p>
+                  <InviteLinkButton
+                    label="Get invite link"
+                    fetchLink={async () => (await client.get('/invites/friend-link')).data.url}
+                    className="text-sm text-stone-900 dark:text-stone-100 underline"
+                  />
+                </div>
               )}
             </div>
             <button type="submit" className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition">
