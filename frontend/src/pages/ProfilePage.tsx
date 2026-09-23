@@ -2,10 +2,26 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import NavBar from '../components/NavBar';
 import InviteLinkButton from '../components/InviteLinkButton';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import SectionMenu from '../components/ui/SectionMenu';
+import MenuItem from '../components/ui/MenuItem';
 import client from '../api/client';
 import { isPushSupported, getExistingSubscription, enableNotifications, disableNotifications } from '../push';
 
-const COMMON_TIMEZONES = Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : [];
+// Intl's own timezone list doesn't include "UTC" — without it explicitly
+// added, a <select value="UTC"> (every account's default) has no matching
+// <option>, and the browser silently falls back to selecting the first
+// option in the list, which alphabetically is "Africa/Abidjan".
+const COMMON_TIMEZONES = Intl.supportedValuesOf ? ['UTC', ...Intl.supportedValuesOf('timeZone')] : ['UTC'];
+
+function detectTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
 
 type PushUiState = 'unsupported' | 'checking' | 'off' | 'on' | 'busy';
 
@@ -61,98 +77,117 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+    <div className="min-h-screen bg-[var(--paper)]">
       <NavBar />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100 mb-6">Your profile</h1>
-
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-6 space-y-4 max-w-md"
-        >
-          <div>
-            <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Email</label>
-            <input
-              value={user?.email || ''}
-              disabled
-              className="w-full border border-stone-200 dark:border-stone-700 rounded-lg px-3 py-2 text-sm bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500"
-            />
-            <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">Email can't be changed.</p>
-          </div>
-
-          <div>
-            <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Username</label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-              className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Timezone</label>
-            {COMMON_TIMEZONES.length > 0 ? (
-              <select
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="w-full border border-stone-300 dark:border-stone-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-stone-900 dark:text-stone-100"
-              >
-                {COMMON_TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>{tz}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
-              />
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="font-display text-2xl text-[var(--ink)]">Your profile</h1>
+          <SectionMenu label="Profile options">
+            {(close) => (
+              <>
+                <MenuItem to="/settings" onClick={close}>
+                  Notification settings
+                </MenuItem>
+                <MenuItem to="/settings" onClick={close}>
+                  Privacy
+                </MenuItem>
+                <MenuItem to="/settings" danger onClick={close}>
+                  Delete account
+                </MenuItem>
+              </>
             )}
-          </div>
+          </SectionMenu>
+        </div>
 
-          {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
-          {saved && <p className="text-emerald-600 dark:text-emerald-400 text-sm">Profile updated.</p>}
+        <Card className="p-6 space-y-4 max-w-md">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-sm text-[var(--graphite)] block mb-1">Email</label>
+              <input
+                value={user?.email || ''}
+                disabled
+                className="w-full border-2 border-[var(--line)] rounded-xl px-3 py-2 text-sm bg-[var(--line)] text-[var(--graphite)]"
+              />
+              <p className="text-xs text-[var(--graphite)] mt-1">Email can't be changed.</p>
+            </div>
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition disabled:opacity-40"
-          >
-            {saving ? 'Saving...' : 'Save changes'}
-          </button>
-        </form>
+            <div>
+              <label className="text-sm text-[var(--graphite)] block mb-1">Username</label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                className="w-full border-2 border-[var(--ink)] rounded-xl px-3 py-2 text-sm bg-[var(--paper)] text-[var(--ink)]"
+                required
+              />
+            </div>
 
-        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-6 mt-6 max-w-md">
-          <p className="text-sm font-medium text-stone-900 dark:text-stone-100 mb-1">Invite friends</p>
-          <p className="text-xs text-stone-400 dark:text-stone-500 mb-3">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-[var(--graphite)]">Timezone</label>
+                <button
+                  type="button"
+                  onClick={() => setTimezone(detectTimezone())}
+                  className="text-xs text-[var(--ink)] underline hover:text-[var(--graphite)]"
+                >
+                  Detect automatically
+                </button>
+              </div>
+              {COMMON_TIMEZONES.length > 0 ? (
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="w-full border-2 border-[var(--ink)] rounded-xl px-3 py-2 text-sm bg-[var(--paper)] text-[var(--ink)]"
+                >
+                  {COMMON_TIMEZONES.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="w-full border-2 border-[var(--ink)] rounded-xl px-3 py-2 text-sm bg-[var(--paper)] text-[var(--ink)]"
+                />
+              )}
+            </div>
+
+            {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+            {saved && <p className="text-emerald-600 dark:text-emerald-400 text-sm">Profile updated.</p>}
+
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Saving...' : 'Save changes'}
+            </Button>
+          </form>
+        </Card>
+
+        <Card className="p-6 mt-6 max-w-md">
+          <p className="text-sm font-medium text-[var(--ink)] mb-1">Invite friends</p>
+          <p className="text-xs text-[var(--graphite)] mb-3">
             Share your link — anyone who opens it becomes your friend on Commit automatically.
           </p>
           <InviteLinkButton
             label="Invite friends on Commit"
             fetchLink={async () => (await client.get('/invites/friend-link')).data.url}
-            className="text-sm bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition disabled:opacity-40"
+            className="text-sm bg-[var(--ink)] text-[var(--paper)] rounded-full px-4 py-2 border-2 border-[var(--ink)] shadow-[3px_3px_0_var(--ink)]"
           />
-        </div>
+        </Card>
 
         {pushState !== 'unsupported' && (
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-6 mt-6 max-w-md">
-            <p className="text-sm font-medium text-stone-900 dark:text-stone-100 mb-1">Notifications</p>
-            <p className="text-xs text-stone-400 dark:text-stone-500 mb-3">
+          <Card className="p-6 mt-6 max-w-md">
+            <p className="text-sm font-medium text-[var(--ink)] mb-1">Notifications</p>
+            <p className="text-xs text-[var(--graphite)] mb-3">
               Get a notification for pact invites, friend requests, and payments when Commit isn't open in front of you.
             </p>
-            <button
-              onClick={handleTogglePush}
-              disabled={pushState === 'checking' || pushState === 'busy'}
-              className="text-sm bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg px-4 py-2 hover:bg-stone-300 dark:hover:bg-stone-600 transition disabled:opacity-40"
-            >
+            <Button variant="secondary" size="sm" onClick={handleTogglePush} disabled={pushState === 'checking' || pushState === 'busy'}>
               {pushState === 'checking' && 'Checking...'}
               {pushState === 'busy' && 'Working...'}
               {pushState === 'on' && 'Disable notifications'}
               {pushState === 'off' && 'Enable notifications'}
-            </button>
+            </Button>
             {pushError && <p className="text-red-600 dark:text-red-400 text-xs mt-2">{pushError}</p>}
-          </div>
+          </Card>
         )}
       </div>
     </div>

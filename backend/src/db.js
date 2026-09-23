@@ -172,6 +172,22 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
+  -- Persisted notification inbox. Written alongside every existing
+  -- notifyUser() call (see push.js) so the live socket popup and the
+  -- /notifications page share one source of truth.
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    url TEXT,
+    payload TEXT,
+    read_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_habit_pacts_status ON habit_pacts(status);
   CREATE INDEX IF NOT EXISTS idx_pact_days_pact_status_date ON pact_days(pact_id, status, scheduled_date);
   CREATE INDEX IF NOT EXISTS idx_pact_participants_user ON pact_participants(user_id);
@@ -181,10 +197,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_friend_requests_addressee_status ON friend_requests(addressee_id, status);
   CREATE INDEX IF NOT EXISTS idx_disputes_pact_day ON disputes(pact_day_id);
   CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read_at);
 `);
 
 // Versioned schema migrations — future changes ALTER/rebuild, never lose data.
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 const schemaVersion = db.prepare('PRAGMA user_version').get().user_version;
 
 // v2: password/email-verification columns replaced with google_id (Google
@@ -216,6 +233,18 @@ if (schemaVersion < 2) {
     db.exec('PRAGMA foreign_keys = ON');
     console.log('[db] migrated users table to schema v2 (Google sign-in)');
   }
+}
+
+// v3: settings columns on users (all additive — plain ALTER TABLE ADD
+// COLUMN, no rebuild needed since nothing is removed or renamed).
+if (schemaVersion < 3) {
+  const cols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+  if (!cols.includes('theme')) db.exec(`ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'`);
+  if (!cols.includes('currency')) db.exec(`ALTER TABLE users ADD COLUMN currency TEXT NOT NULL DEFAULT '$'`);
+  if (!cols.includes('week_start')) db.exec(`ALTER TABLE users ADD COLUMN week_start TEXT NOT NULL DEFAULT 'mon'`);
+  if (!cols.includes('notify_prefs')) db.exec(`ALTER TABLE users ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}'`);
+  if (!cols.includes('discoverable')) db.exec(`ALTER TABLE users ADD COLUMN discoverable INTEGER NOT NULL DEFAULT 1`);
+  console.log('[db] migrated users table to schema v3 (settings columns)');
 }
 
 if (schemaVersion < CURRENT_SCHEMA_VERSION) {

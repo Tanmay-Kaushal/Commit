@@ -15,6 +15,9 @@ export type PactFormValues = {
   endDate: string;
 };
 
+const inputClass = 'w-full border-2 border-[var(--ink)] rounded-xl px-3 py-2 text-sm bg-[var(--paper)] text-[var(--ink)]';
+const labelClass = 'text-sm text-[var(--graphite)] block mb-1';
+
 export default function PactFormFields({
   values,
   onChange,
@@ -44,17 +47,17 @@ export default function PactFormFields({
   return (
     <>
       <div>
-        <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Habit</label>
+        <label className={labelClass}>Habit</label>
         <input
           value={habitDescription}
           onChange={(e) => set({ habitDescription: e.target.value })}
           placeholder="e.g. Run"
-          className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
+          className={inputClass}
         />
       </div>
 
       <div>
-        <label className="text-sm text-stone-600 dark:text-stone-400 block mb-2">Which days?</label>
+        <label className="text-sm text-[var(--graphite)] block mb-2">Which days?</label>
         <div className="flex gap-1.5 mb-2">
           {WEEKDAY_LABELS.map((d) => (
             <button
@@ -62,17 +65,17 @@ export default function PactFormFields({
               type="button"
               title={d.full}
               onClick={() => toggleWeekday(d.iso)}
-              className={`w-9 h-9 rounded-full text-sm font-medium transition ${
+              className={`w-9 h-9 rounded-full text-sm font-semibold border-2 border-[var(--ink)] transition-colors ${
                 selectedDays.includes(d.iso)
-                  ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900'
-                  : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400'
+                  ? 'bg-[var(--ink)] text-[var(--paper)]'
+                  : 'bg-[var(--paper)] text-[var(--ink)] hover:bg-[var(--line)]'
               }`}
             >
               {d.short}
             </button>
           ))}
         </div>
-        <label className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
+        <label className="flex items-center gap-2 text-sm text-[var(--graphite)]">
           <input type="checkbox" checked={selectedDays.length === 7} onChange={toggleEveryday} />
           Everyday
         </label>
@@ -80,36 +83,36 @@ export default function PactFormFields({
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">From</label>
+          <label className={labelClass}>From</label>
           <input
             type="date"
             value={startDate}
             min={todayISO()}
             onChange={(e) => set({ startDate: e.target.value })}
-            className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
+            className={inputClass}
           />
         </div>
         <div>
-          <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">To</label>
+          <label className={labelClass}>To</label>
           <input
             type="date"
             value={endDate}
             min={startDate || todayISO()}
             onChange={(e) => set({ endDate: e.target.value })}
-            className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
+            className={inputClass}
           />
         </div>
       </div>
 
       <div>
-        <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Stake per missed day</label>
+        <label className={labelClass}>Stake per missed day</label>
         <input
           type="text"
           inputMode="numeric"
           placeholder="e.g. 100"
           value={stakeAmount}
           onChange={handleStakeChange}
-          className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
+          className={inputClass}
         />
       </div>
     </>

@@ -24,6 +24,14 @@ export function maskToDays(mask: number) {
   return WEEKDAY_LABELS.filter((d) => isDayScheduled(mask, d.iso)).map((d) => d.iso);
 }
 
+// Reorders the week for display when the user's Settings > week-start
+// preference is Sunday (WEEKDAY_LABELS is authored Monday-first to match
+// the ISO weekday numbering used everywhere else).
+export function orderByWeekStart(weekStart: 'mon' | 'sun' = 'mon') {
+  if (weekStart === 'mon') return WEEKDAY_LABELS;
+  return [WEEKDAY_LABELS[6], ...WEEKDAY_LABELS.slice(0, 6)];
+}
+
 // Short human summary like "Everyday" / "Weekdays" / "Mon, Wed, Fri".
 export function describeMask(mask: number) {
   if (mask === ALL_DAYS_MASK) return 'Everyday';

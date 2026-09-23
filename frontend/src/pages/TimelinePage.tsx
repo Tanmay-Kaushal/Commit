@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import client from '../api/client';
 import NavBar from '../components/NavBar';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
 
 type Event = {
   id: number;
@@ -49,37 +51,30 @@ export default function TimelinePage() {
   }, [id]);
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+    <div className="min-h-screen bg-[var(--paper)]">
       <NavBar />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <Link to={`/pacts/${id}`} className="text-sm text-stone-500 dark:text-stone-400 underline">
+        <Link to={`/pacts/${id}`} className="text-sm text-[var(--graphite)] underline hover:text-[var(--ink)]">
           &larr; Back to pact
         </Link>
 
-        <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100 mt-4 mb-6">History</h1>
+        <h1 className="font-display text-2xl text-[var(--ink)] mt-4 mb-6">History</h1>
 
         {loadError && (
-          <p className="text-red-600 dark:text-red-400 text-sm mb-4">
-            {loadError}{' '}
-            <button onClick={load} className="underline">
+          <p className="text-red-600 dark:text-red-400 text-sm mb-4 flex items-center gap-2">
+            {loadError}
+            <Button size="sm" variant="secondary" onClick={load}>
               Retry
-            </button>
+            </Button>
           </p>
         )}
 
         <div className="space-y-3">
           {events.map((event) => (
-            <div
-              key={event.id}
-              className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg px-4 py-3 flex items-center justify-between"
-            >
-              <span className="text-sm text-stone-900 dark:text-stone-100">
-                {eventLabels[event.event_type] || event.event_type}
-              </span>
-              <span className="text-xs text-stone-400 dark:text-stone-500">
-                {new Date(event.created_at + 'Z').toLocaleString()}
-              </span>
-            </div>
+            <Card key={event.id} className="px-4 py-3 flex items-center justify-between">
+              <span className="text-sm text-[var(--ink)]">{eventLabels[event.event_type] || event.event_type}</span>
+              <span className="text-xs text-[var(--graphite)]">{new Date(event.created_at + 'Z').toLocaleString()}</span>
+            </Card>
           ))}
         </div>
       </div>

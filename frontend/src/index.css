@@ -5,12 +5,73 @@
    variants only apply when the user explicitly switches it on. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Sketchbook theme tokens. Plain CSS custom properties (not Tailwind
+   @theme colors) so a single utility class like `bg-[var(--paper)]`
+   already swaps for dark mode via the .dark override below — no
+   separate light/dark class pair needed on every element. */
+/* Warm cream throughout — never pure white, even in dark mode where the
+   "ink" tone doubles as text/border/button-fill color and used to sit at
+   near-white (#f2f1ec, ~16:1 contrast) which read as glaring on a dark
+   background. Dropped to a dimmer cream (~11.5:1, still well past AAA's
+   7:1) instead. */
+:root {
+  --paper: #f0ead6;
+  --ink: #1c1a16;
+  --graphite: #8a8275;
+  --line: #ded5bc;
+  --accent: #e2b23c;
+}
+
+.dark {
+  --paper: #1a1815;
+  --ink: #ddd0ad;
+  --graphite: #a89e88;
+  --line: #3a352c;
+  --accent: #e2b23c;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  background: #f6f5f3;
+  font-family: 'Quicksand', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: #f0ead6;
 }
 
 .dark body {
-  background: #1c1917;
+  background: #1a1815;
+}
+
+.font-display {
+  font-family: 'Bagel Fat One', 'Quicksand', system-ui, sans-serif;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

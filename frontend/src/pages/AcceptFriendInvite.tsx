@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { savePendingInvite } from '../pendingInvite';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
 
 type Preview = { userId: number; username: string; email: string };
 
@@ -41,25 +43,25 @@ export default function AcceptFriendInvite() {
   }, [code, user, preview, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-50 dark:bg-stone-950 px-4">
-      <div className="w-full max-w-sm bg-white dark:bg-stone-900 rounded-xl shadow-sm border border-stone-200 dark:border-stone-800 p-8 text-center">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--paper)] px-4">
+      <Card className="w-full max-w-sm p-8 text-center">
         {error ? (
           <>
             <p className="text-red-600 dark:text-red-400 text-sm mb-4">{error}</p>
-            <button onClick={() => navigate('/dashboard')} className="text-sm text-stone-900 dark:text-stone-100 font-medium underline">
+            <Button size="sm" onClick={() => navigate('/dashboard')}>
               Go to dashboard
-            </button>
+            </Button>
           </>
         ) : claimed ? (
           <p className="text-emerald-600 dark:text-emerald-400 text-sm">
             You're now friends with {preview?.username || preview?.email}. Taking you to your dashboard...
           </p>
         ) : preview ? (
-          <p className="text-stone-600 dark:text-stone-400 text-sm">Connecting you with {preview.username || preview.email}...</p>
+          <p className="text-[var(--graphite)] text-sm">Connecting you with {preview.username || preview.email}...</p>
         ) : (
-          <p className="text-stone-400 dark:text-stone-500 text-sm">Loading...</p>
+          <p className="text-[var(--graphite)] text-sm">Loading...</p>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

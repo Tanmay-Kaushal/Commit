@@ -11,8 +11,7 @@ full history view of everything that's happened on a pact.
 ## Tech stack
 
 **Backend:** Node.js, Express, SQLite (via Node's built-in `node:sqlite`),
-Socket.IO, Web Push, node-cron, Luxon, JWT auth, Google Sign-In
-(`google-auth-library`)
+Socket.IO, Web Push, node-cron, Luxon, JWT auth, Google OAuth (`google-auth-library`)
 
 **Frontend:** React, TypeScript, Vite, Tailwind CSS, React Router
 

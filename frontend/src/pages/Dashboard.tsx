@@ -1,12 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useUserNotifications } from '../api/socket';
 import NavBar from '../components/NavBar';
-import InviteLinkButton from '../components/InviteLinkButton';
 import PactFormFields, { isPactFormValid, type PactFormValues } from '../components/PactFormFields';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import SectionMenu from '../components/ui/SectionMenu';
+import MenuItem from '../components/ui/MenuItem';
+import { useToast } from '../components/ui/Toast';
 import { describeMask, maskToDays } from '../weekdays';
+import { formatMoney } from '../lib/format';
 
 type Pact = {
   id: number;
@@ -21,9 +26,17 @@ type Pact = {
 };
 
 type Friend = { id: number; email: string; username: string };
-type FriendRequest = { id: number; userId: number; email: string; username: string; created_at: string };
 
 const EMPTY_FORM: PactFormValues = { habitDescription: '', stakeAmount: '', selectedDays: [], startDate: '', endDate: '' };
+
+type FilterOption = 'all' | 'active' | 'pending' | 'closed';
+type SortOption = 'start_date' | 'name' | 'stake';
+
+function pactBucket(status: string): FilterOption {
+  if (status === 'active') return 'active';
+  if (status === 'pending_invite') return 'pending';
+  return 'closed'; // closed, completed, cancelled
+}
 
 function pactToFormValues(pact: Pact): PactFormValues {
   return {
@@ -37,10 +50,9 @@ function pactToFormValues(pact: Pact): PactFormValues {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { show } = useToast();
   const [pacts, setPacts] = useState<Pact[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
-  const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -53,18 +65,21 @@ export default function Dashboard() {
   const [groupExtraIdentifiers, setGroupExtraIdentifiers] = useState('');
   const [error, setError] = useState('');
 
-  const [showFriendForm, setShowFriendForm] = useState(false);
-  const [friendIdentifier, setFriendIdentifier] = useState('');
-  const [friendError, setFriendError] = useState('');
-  // Set when a friend request 404s — offers sharing your invite link instead.
-  const [noAccountFound, setNoAccountFound] = useState(false);
-  const [openFriendId, setOpenFriendId] = useState<number | null>(null);
-
-  // Per-pact 3-dot menu / inline edit (only one open at a time).
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<PactFormValues>(EMPTY_FORM);
   const [editError, setEditError] = useState('');
+
+  const [filter, setFilter] = useState<FilterOption>(
+    () => (localStorage.getItem('dashboard_filter') as FilterOption) || 'all'
+  );
+  const [sort, setSort] = useState<SortOption>(
+    () => (localStorage.getItem('dashboard_sort') as SortOption) || 'start_date'
+  );
+  const [showArchived, setShowArchived] = useState(() => localStorage.getItem('dashboard_show_archived') === '1');
+
+  useEffect(() => localStorage.setItem('dashboard_filter', filter), [filter]);
+  useEffect(() => localStorage.setItem('dashboard_sort', sort), [sort]);
+  useEffect(() => localStorage.setItem('dashboard_show_archived', showArchived ? '1' : '0'), [showArchived]);
 
   async function loadPacts() {
     setLoading(true);
@@ -86,31 +101,31 @@ export default function Dashboard() {
     } catch {}
   }
 
-  async function loadRequests() {
-    try {
-      const res = await client.get('/friends/requests');
-      setIncomingRequests(res.data.incoming);
-      setOutgoingRequests(res.data.outgoing);
-    } catch {}
-  }
-
   useEffect(() => {
     loadPacts();
     loadFriends();
-    loadRequests();
   }, []);
 
   useUserNotifications(user?.id, {
     onPactInvite: () => loadPacts(),
-    onFriendRequest: () => loadRequests(),
-    onFriendRequestAccepted: () => {
-      loadFriends();
-      loadRequests();
-    },
+    onFriendRequestAccepted: () => loadFriends(),
   });
 
-  // A partner is optional — a pact can be created solo, shared via link later.
   const canSubmit = isPactFormValid(form);
+
+  const visiblePacts = useMemo(() => {
+    let list = pacts.filter((p) => {
+      if (filter !== 'all') return pactBucket(p.status) === filter;
+      if (!showArchived && pactBucket(p.status) === 'closed') return false;
+      return true;
+    });
+    list = [...list].sort((a, b) => {
+      if (sort === 'name') return a.habit_description.localeCompare(b.habit_description);
+      if (sort === 'stake') return b.stake_amount - a.stake_amount;
+      return a.start_date.localeCompare(b.start_date);
+    });
+    return list;
+  }, [pacts, filter, sort, showArchived]);
 
   function toggleGroupFriend(id: string) {
     setGroupFriendIds((current) => (current.includes(id) ? current.filter((f) => f !== id) : [...current, id]));
@@ -158,6 +173,7 @@ export default function Dashboard() {
       resetPactForm();
       loadPacts();
       loadFriends();
+      show('Pact created', 'success');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Could not create pact');
     }
@@ -174,46 +190,9 @@ export default function Dashboard() {
     loadPacts();
   }
 
-  async function handleAddFriend(e: React.FormEvent) {
-    e.preventDefault();
-    setFriendError('');
-    setNoAccountFound(false);
-    const identifier = friendIdentifier.trim();
-    try {
-      const res = await client.post('/friends/requests', { identifier });
-      setFriendIdentifier('');
-      setShowFriendForm(false);
-      if (res.data.status === 'accepted') loadFriends();
-      else loadRequests();
-    } catch (err: any) {
-      setFriendError(err.response?.data?.error || 'Could not send friend request');
-      if (err.response?.status === 404) setNoAccountFound(true);
-    }
-  }
-
-  async function handleAcceptRequest(id: number) {
-    await client.post(`/friends/requests/${id}/accept`);
-    loadFriends();
-    loadRequests();
-  }
-
-  async function handleRejectRequest(id: number) {
-    await client.post(`/friends/requests/${id}/reject`);
-    loadRequests();
-  }
-
-  async function handleRemoveFriend(id: number) {
-    await client.delete(`/friends/${id}`);
-    setOpenFriendId(null);
-    loadFriends();
-  }
-
-  // ---- 3-dot menu actions (creator only) ----
-
   function openEdit(pact: Pact) {
     setEditForm(pactToFormValues(pact));
     setEditingId(pact.id);
-    setOpenMenuId(null);
     setEditError('');
   }
 
@@ -234,36 +213,43 @@ export default function Dashboard() {
       });
       setEditingId(null);
       loadPacts();
+      show('Pact updated', 'success');
     } catch (err: any) {
       setEditError(err.response?.data?.error || 'Could not save changes');
     }
   }
 
   async function handleCancel(pactId: number) {
-    if (!confirm('Cancel this pact? It never activated, so there\'s nothing to settle.')) return;
-    setOpenMenuId(null);
+    if (!confirm("Cancel this pact? It never activated, so there's nothing to settle.")) return;
     await client.post(`/pacts/${pactId}/cancel`);
     loadPacts();
   }
 
   async function handleClose(pactId: number) {
     if (!confirm('Close this pact now?')) return;
-    setOpenMenuId(null);
     await client.post(`/pacts/${pactId}/close`);
     loadPacts();
   }
 
   async function handleReopen(pactId: number) {
-    setOpenMenuId(null);
     await client.post(`/pacts/${pactId}/reopen`);
     loadPacts();
   }
 
   async function handleDelete(pactId: number) {
     if (!confirm('Permanently remove this pact and its history? This cannot be undone.')) return;
-    setOpenMenuId(null);
     await client.delete(`/pacts/${pactId}`);
     loadPacts();
+  }
+
+  async function handleCopyInviteLink() {
+    try {
+      const res = await client.get('/invites/friend-link');
+      await navigator.clipboard.writeText(res.data.url);
+      show('Invite link copied', 'success');
+    } catch {
+      show('Could not get invite link', 'error');
+    }
   }
 
   function statusBadge(pact: Pact) {
@@ -271,12 +257,12 @@ export default function Dashboard() {
       return pendingForMe(pact) ? (
         <span className="text-amber-600 dark:text-amber-400 text-xs font-medium">Invite pending — join?</span>
       ) : (
-        <span className="text-stone-400 dark:text-stone-500 text-xs">Waiting on others to accept</span>
+        <span className="text-[var(--graphite)] text-xs">Waiting on others to accept</span>
       );
     }
-    if (pact.status === 'cancelled') return <span className="text-red-500 dark:text-red-400 text-xs font-medium">Cancelled</span>;
-    if (pact.status === 'completed') return <span className="text-stone-500 dark:text-stone-400 text-xs font-medium">Completed</span>;
-    if (pact.status === 'closed') return <span className="text-stone-500 dark:text-stone-400 text-xs font-medium">Closed</span>;
+    if (pact.status === 'cancelled') return <span className="text-red-600 dark:text-red-400 text-xs font-medium">Cancelled</span>;
+    if (pact.status === 'completed') return <span className="text-[var(--graphite)] text-xs font-medium">Completed</span>;
+    if (pact.status === 'closed') return <span className="text-[var(--graphite)] text-xs font-medium">Closed</span>;
     return <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium">Active</span>;
   }
 
@@ -284,292 +270,315 @@ export default function Dashboard() {
     return pact.status === 'pending_invite' && pact.creator_id !== user?.id;
   }
 
+  const FILTERS: { value: FilterOption; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'active', label: 'Active' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'closed', label: 'Closed/cancelled' },
+  ];
+  const SORTS: { value: SortOption; label: string }[] = [
+    { value: 'start_date', label: 'Start date' },
+    { value: 'name', label: 'Name' },
+    { value: 'stake', label: 'Stake' },
+  ];
+
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+    <div className="min-h-screen bg-[var(--paper)]">
       <NavBar />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold text-stone-900 dark:text-stone-100">Your pacts</h1>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition"
-          >
-            {showForm ? 'Cancel' : 'New pact'}
-          </button>
+        <div className="flex items-center justify-between mb-6 gap-2">
+          <h1 className="font-display text-2xl text-[var(--ink)]">Your pacts</h1>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Cancel' : 'New pact'}
+            </Button>
+            <SectionMenu label="Dashboard options">
+              {(close) => (
+                <>
+                  <MenuItem
+                    onClick={() => {
+                      handleCopyInviteLink();
+                      close();
+                    }}
+                  >
+                    Copy invite link
+                  </MenuItem>
+                  <MenuItem to="/friends" onClick={close}>
+                    Add friend
+                  </MenuItem>
+                  <div className="my-1.5 border-t-2 border-[var(--line)]" />
+                  <div className="px-4 pt-1.5 pb-1 text-xs font-semibold text-[var(--graphite)] uppercase tracking-wide">Filter</div>
+                  {FILTERS.map((f) => (
+                    <MenuItem key={f.value} onClick={() => setFilter(f.value)}>
+                      {filter === f.value ? '✓ ' : ''}
+                      {f.label}
+                    </MenuItem>
+                  ))}
+                  <div className="my-1.5 border-t-2 border-[var(--line)]" />
+                  <div className="px-4 pt-1.5 pb-1 text-xs font-semibold text-[var(--graphite)] uppercase tracking-wide">Sort by</div>
+                  {SORTS.map((s) => (
+                    <MenuItem key={s.value} onClick={() => setSort(s.value)}>
+                      {sort === s.value ? '✓ ' : ''}
+                      {s.label}
+                    </MenuItem>
+                  ))}
+                  <div className="my-1.5 border-t-2 border-[var(--line)]" />
+                  <MenuItem onClick={() => setShowArchived((v) => !v)}>
+                    {showArchived ? '✓ ' : ''}Show archived
+                  </MenuItem>
+                </>
+              )}
+            </SectionMenu>
+          </div>
         </div>
 
         {showForm && (
-          <form onSubmit={handleCreate} className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-6 mb-6 space-y-4">
-            <PactFormFields values={form} onChange={setForm} />
+          <Card className="p-6 mb-6 space-y-4">
+            <form onSubmit={handleCreate} className="space-y-4">
+              <PactFormFields values={form} onChange={setForm} />
 
-            <label className="flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
-              <input
-                type="checkbox"
-                checked={isGroup}
-                onChange={(e) => {
-                  setIsGroup(e.target.checked);
-                  setSelectedFriendId('');
-                  setPartnerIdentifier('');
-                  setGroupFriendIds([]);
-                  setGroupExtraIdentifiers('');
-                }}
-              />
-              Make this a group pact (more than one partner)
-            </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--graphite)]">
+                <input
+                  type="checkbox"
+                  checked={isGroup}
+                  onChange={(e) => {
+                    setIsGroup(e.target.checked);
+                    setSelectedFriendId('');
+                    setPartnerIdentifier('');
+                    setGroupFriendIds([]);
+                    setGroupExtraIdentifiers('');
+                  }}
+                />
+                Make this a group pact (more than one partner)
+              </label>
 
-            {!isGroup ? (
-              <>
-                {friends.length > 0 && (
-                  <div>
-                    <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Invite a friend</label>
-                    <select
-                      value={selectedFriendId}
-                      onChange={(e) => {
-                        setSelectedFriendId(e.target.value);
-                        if (e.target.value) setPartnerIdentifier('');
-                      }}
-                      className="w-full border border-stone-300 dark:border-stone-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-stone-900 dark:text-stone-100"
-                    >
-                      <option value="">Choose from your friends...</option>
-                      {friends.map((f) => (
-                        <option key={f.id} value={f.id}>{f.username} ({f.email})</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <div>
-                  <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">
-                    {friends.length > 0 ? 'Or invite by email/username' : "Partner's email or username"}
-                  </label>
-                  <input
-                    value={partnerIdentifier}
-                    onChange={(e) => {
-                      setPartnerIdentifier(e.target.value);
-                      if (e.target.value) setSelectedFriendId('');
-                    }}
-                    placeholder="partner@example.com or username"
-                    className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
-                    disabled={selectedFriendId !== ''}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                {friends.length > 0 && (
-                  <div>
-                    <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Invite friends</label>
-                    <div className="flex flex-wrap gap-2">
-                      {friends.map((f) => (
-                        <label
-                          key={f.id}
-                          className={`text-xs border rounded-full px-3 py-1 cursor-pointer transition ${
-                            groupFriendIds.includes(String(f.id))
-                              ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100'
-                              : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-300 dark:border-stone-700'
-                          }`}
-                        >
-                          <input type="checkbox" className="hidden" checked={groupFriendIds.includes(String(f.id))} onChange={() => toggleGroupFriend(String(f.id))} />
-                          {f.username}
-                        </label>
-                      ))}
+              {!isGroup ? (
+                <>
+                  {friends.length > 0 && (
+                    <div>
+                      <label className="text-sm text-[var(--graphite)] block mb-1">Invite a friend</label>
+                      <select
+                        value={selectedFriendId}
+                        onChange={(e) => {
+                          setSelectedFriendId(e.target.value);
+                          if (e.target.value) setPartnerIdentifier('');
+                        }}
+                        className="w-full border-2 border-[var(--ink)] rounded-xl px-3 py-2 text-sm bg-[var(--paper)] text-[var(--ink)]"
+                      >
+                        <option value="">Choose from your friends...</option>
+                        {friends.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.username} ({f.email})
+                          </option>
+                        ))}
+                      </select>
                     </div>
+                  )}
+                  <div>
+                    <label className="text-sm text-[var(--graphite)] block mb-1">
+                      {friends.length > 0 ? 'Or invite by email/username' : "Partner's email or username"}
+                    </label>
+                    <input
+                      value={partnerIdentifier}
+                      onChange={(e) => {
+                        setPartnerIdentifier(e.target.value);
+                        if (e.target.value) setSelectedFriendId('');
+                      }}
+                      placeholder="partner@example.com or username"
+                      className="w-full border-2 border-[var(--ink)] rounded-xl px-3 py-2 text-sm bg-[var(--paper)] text-[var(--ink)]"
+                      disabled={selectedFriendId !== ''}
+                    />
                   </div>
-                )}
-                <div>
-                  <label className="text-sm text-stone-600 dark:text-stone-400 block mb-1">Or add more by email/username (comma-separated)</label>
-                  <input
-                    value={groupExtraIdentifiers}
-                    onChange={(e) => setGroupExtraIdentifiers(e.target.value)}
-                    placeholder="alice@example.com, bob_j"
-                    className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-              </>
-            )}
-
-            {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Create pact
-            </button>
-          </form>
-        )}
-
-        {incomingRequests.length > 0 && (
-          <div className="mb-6">
-            <h2 className="text-sm font-medium text-stone-600 dark:text-stone-400 mb-3">Friend requests</h2>
-            <div className="space-y-2">
-              {incomingRequests.map((r) => (
-                <div key={r.id} className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm text-stone-900 dark:text-stone-100">{r.username} ({r.email})</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleAcceptRequest(r.id)} className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5">Accept</button>
-                    <button onClick={() => handleRejectRequest(r.id)} className="text-sm bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200 rounded-lg px-3 py-1.5">Reject</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-stone-600 dark:text-stone-400">Friends</h2>
-          <button onClick={() => setShowFriendForm(!showFriendForm)} className="text-sm text-stone-900 dark:text-stone-100 underline">
-            {showFriendForm ? 'Cancel' : 'Add friend'}
-          </button>
-        </div>
-
-        {showFriendForm && (
-          <form onSubmit={handleAddFriend} className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-4 mb-4 flex gap-2 items-start">
-            <div className="flex-1">
-              <input
-                value={friendIdentifier}
-                onChange={(e) => setFriendIdentifier(e.target.value)}
-                placeholder="Email or username"
-                className="w-full border border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 rounded-lg px-3 py-2 text-sm"
-              />
-              {friendError && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{friendError}</p>}
-              {noAccountFound && (
-                <div className="mt-2">
-                  <p className="text-xs text-stone-400 dark:text-stone-500 mb-1">
-                    No account found — share your invite link with them instead:
-                  </p>
-                  <InviteLinkButton
-                    label="Get invite link"
-                    fetchLink={async () => (await client.get('/invites/friend-link')).data.url}
-                    className="text-sm text-stone-900 dark:text-stone-100 underline"
-                  />
-                </div>
-              )}
-            </div>
-            <button type="submit" className="bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 text-sm font-medium rounded-lg px-4 py-2 hover:bg-stone-700 dark:hover:bg-stone-300 transition">
-              Send request
-            </button>
-          </form>
-        )}
-
-        {(friends.length > 0 || outgoingRequests.length > 0) && (
-          <div className="flex flex-wrap gap-2 mb-6">
-            {friends.map((f) =>
-              openFriendId === f.id ? (
-                <span key={f.id} className="text-xs bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-full pl-3 pr-1 py-1 text-stone-600 dark:text-stone-400 flex items-center gap-2">
-                  {f.username}
-                  <button onClick={() => handleRemoveFriend(f.id)} className="text-red-600 dark:text-red-400 font-medium hover:text-red-700 dark:hover:text-red-300">Remove</button>
-                  <button onClick={() => setOpenFriendId(null)} className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300" aria-label="Cancel">&times;</button>
-                </span>
+                </>
               ) : (
-                <button key={f.id} onClick={() => setOpenFriendId(f.id)} className="text-xs bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-full px-3 py-1 text-stone-600 dark:text-stone-400 hover:border-stone-400 dark:hover:border-stone-500 transition">
-                  {f.username}
-                </button>
-              )
-            )}
-            {outgoingRequests.map((r) => (
-              <span key={`out-${r.id}`} className="text-xs bg-white dark:bg-stone-900 border border-dashed border-stone-300 dark:border-stone-700 rounded-full px-3 py-1 text-stone-400 dark:text-stone-500">
-                {r.username} (requested)
-              </span>
-            ))}
-          </div>
+                <>
+                  {friends.length > 0 && (
+                    <div>
+                      <label className="text-sm text-[var(--graphite)] block mb-1">Invite friends</label>
+                      <div className="flex flex-wrap gap-2">
+                        {friends.map((f) => (
+                          <label
+                            key={f.id}
+                            className={`text-xs border-2 border-[var(--ink)] rounded-full px-3 py-1 cursor-pointer transition-colors ${
+                              groupFriendIds.includes(String(f.id))
+                                ? 'bg-[var(--ink)] text-[var(--paper)]'
+                                : 'bg-[var(--paper)] text-[var(--ink)]'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="hidden"
+                              checked={groupFriendIds.includes(String(f.id))}
+                              onChange={() => toggleGroupFriend(String(f.id))}
+                            />
+                            {f.username}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-sm text-[var(--graphite)] block mb-1">Or add more by email/username (comma-separated)</label>
+                    <input
+                      value={groupExtraIdentifiers}
+                      onChange={(e) => setGroupExtraIdentifiers(e.target.value)}
+                      placeholder="alice@example.com, bob_j"
+                      className="w-full border-2 border-[var(--ink)] rounded-xl px-3 py-2 text-sm bg-[var(--paper)] text-[var(--ink)]"
+                    />
+                  </div>
+                </>
+              )}
+
+              {error && <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>}
+              <Button type="submit" disabled={!canSubmit}>
+                Create pact
+              </Button>
+            </form>
+          </Card>
         )}
 
         {loading ? (
-          <p className="text-stone-400 dark:text-stone-500 text-sm">Loading...</p>
+          <p className="text-[var(--graphite)] text-sm">Loading...</p>
         ) : loadError ? (
-          <div className="text-sm text-red-600 dark:text-red-400">
-            {loadError} <button onClick={loadPacts} className="underline">Retry</button>
+          <div className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
+            {loadError}
+            <Button size="sm" variant="secondary" onClick={loadPacts}>
+              Retry
+            </Button>
           </div>
-        ) : pacts.length === 0 ? (
-          <p className="text-stone-400 dark:text-stone-500 text-sm">No pacts yet. Create one to get started.</p>
+        ) : visiblePacts.length === 0 ? (
+          <Card className="p-6 text-center">
+            <p className="text-[var(--graphite)] text-sm">
+              {pacts.length === 0 ? 'No pacts yet. Create one to get started.' : 'Nothing matches this filter.'}
+            </p>
+          </Card>
         ) : (
           <div className="space-y-3">
-            {pacts.map((pact) => {
+            {visiblePacts.map((pact) => {
               const iAmCreator = pact.creator_id === user?.id;
               const isEditing = editingId === pact.id;
 
               return (
-                <div key={pact.id} className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-4">
+                <Card key={pact.id} className="p-4">
                   {isEditing ? (
                     <form onSubmit={handleSaveEdit} className="space-y-3">
                       <PactFormFields values={editForm} onChange={setEditForm} />
                       {editError && <p className="text-red-600 dark:text-red-400 text-sm">{editError}</p>}
                       <div className="flex gap-2">
-                        <button type="submit" className="text-sm bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-lg px-3 py-1.5">Save changes</button>
-                        <button type="button" onClick={() => setEditingId(null)} className="text-sm text-stone-500 dark:text-stone-400 underline">Cancel</button>
+                        <Button type="submit" size="sm">
+                          Save changes
+                        </Button>
+                        <Button type="button" size="sm" variant="secondary" onClick={() => setEditingId(null)}>
+                          Cancel
+                        </Button>
                       </div>
                     </form>
                   ) : (
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-stone-900 dark:text-stone-100">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-[var(--ink)] truncate">
                           {pact.habit_description}
-                          {pact.is_group ? <span className="ml-2 text-xs text-stone-400 dark:text-stone-500 font-normal">(group)</span> : null}
+                          {pact.is_group ? <span className="ml-2 text-xs text-[var(--graphite)] font-normal">(group)</span> : null}
                         </p>
-                        <p className="text-sm text-stone-500 dark:text-stone-400">
-                          {describeMask(pact.scheduled_days)} &middot; stake {pact.stake_amount}/missed day &middot; {statusBadge(pact)}
+                        <p className="text-sm text-[var(--graphite)]">
+                          {describeMask(pact.scheduled_days)} &middot; stake {formatMoney(pact.stake_amount, user?.currency)}/missed day &middot; {statusBadge(pact)}
                         </p>
-                        <p className="text-xs text-stone-400 dark:text-stone-500">{pact.start_date} &rarr; {pact.end_date}</p>
+                        <p className="text-xs text-[var(--graphite)]">
+                          {pact.start_date} &rarr; {pact.end_date}
+                        </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {pendingForMe(pact) ? (
                           <>
-                            <button onClick={() => handleAccept(pact.id)} className="bg-emerald-600 text-white text-sm font-medium rounded-lg px-3 py-1.5 hover:bg-emerald-700 transition">Accept</button>
-                            <button onClick={() => handleReject(pact.id)} className="bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200 text-sm font-medium rounded-lg px-3 py-1.5 hover:bg-stone-300 dark:hover:bg-stone-600 transition">Reject</button>
+                            <Button size="sm" variant="primary" onClick={() => handleAccept(pact.id)}>
+                              Accept
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={() => handleReject(pact.id)}>
+                              Reject
+                            </Button>
                           </>
                         ) : (
-                          <Link to={`/pacts/${pact.id}`} className="text-stone-900 dark:text-stone-100 text-sm font-medium underline">Open</Link>
+                          <Button size="sm" variant="secondary" to={`/pacts/${pact.id}`}>
+                            Open
+                          </Button>
                         )}
 
                         {iAmCreator && (
-                          <div className="relative">
-                            <button
-                              onClick={() => setOpenMenuId(openMenuId === pact.id ? null : pact.id)}
-                              className="text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-200 px-1"
-                              aria-label="Pact options"
-                            >
-                              &#8942;
-                            </button>
-                            {openMenuId === pact.id && (
-                              <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg shadow-lg z-10 py-1 text-sm">
+                          <SectionMenu label="Pact options">
+                            {(close) => (
+                              <>
                                 {['pending_invite', 'active'].includes(pact.status) && (
-                                  <button onClick={() => openEdit(pact)} className="block w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200">
+                                  <MenuItem
+                                    onClick={() => {
+                                      openEdit(pact);
+                                      close();
+                                    }}
+                                  >
                                     Edit pact
-                                  </button>
+                                  </MenuItem>
                                 )}
                                 {pact.status === 'active' && (
-                                  <button onClick={() => handleClose(pact.id)} className="block w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200">
+                                  <MenuItem
+                                    onClick={() => {
+                                      handleClose(pact.id);
+                                      close();
+                                    }}
+                                  >
                                     Close pact
-                                  </button>
+                                  </MenuItem>
                                 )}
                                 {pact.status === 'pending_invite' && (
-                                  <button onClick={() => handleCancel(pact.id)} className="block w-full text-left px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950 text-red-600 dark:text-red-400">
+                                  <MenuItem
+                                    danger
+                                    onClick={() => {
+                                      handleCancel(pact.id);
+                                      close();
+                                    }}
+                                  >
                                     Cancel pact
-                                  </button>
+                                  </MenuItem>
                                 )}
                                 {pact.status === 'closed' && (
-                                  <button onClick={() => handleReopen(pact.id)} className="block w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200">
+                                  <MenuItem
+                                    onClick={() => {
+                                      handleReopen(pact.id);
+                                      close();
+                                    }}
+                                  >
                                     Reopen pact
-                                  </button>
+                                  </MenuItem>
                                 )}
                                 {['closed', 'completed', 'cancelled'].includes(pact.status) && (
-                                  <button onClick={() => handleDelete(pact.id)} className="block w-full text-left px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950 text-red-600 dark:text-red-400">
+                                  <MenuItem
+                                    danger
+                                    onClick={() => {
+                                      handleDelete(pact.id);
+                                      close();
+                                    }}
+                                  >
                                     Remove pact
-                                  </button>
+                                  </MenuItem>
                                 )}
-                              </div>
+                              </>
                             )}
-                          </div>
+                          </SectionMenu>
                         )}
                       </div>
                     </div>
                   )}
-                </div>
+                </Card>
               );
             })}
           </div>
         )}
+
+        <p className="mt-6 text-xs text-[var(--graphite)]">
+          {friends.length} friend{friends.length === 1 ? '' : 's'} &middot;{' '}
+          <Link to="/friends" className="underline hover:text-[var(--ink)]">
+            manage friends
+          </Link>
+        </p>
       </div>
     </div>
   );

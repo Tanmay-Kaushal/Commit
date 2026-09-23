@@ -6,15 +6,20 @@ const { notifyUser } = require('../push');
 const router = express.Router();
 router.use(requireAuth);
 
-// The current user's accepted friends.
+// The current user's accepted friends, with how many pacts they share —
+// a single query with a correlated subquery, not an N+1 loop.
 router.get('/', (req, res) => {
   const friends = db.prepare(`
-    SELECT u.id, u.email, u.username
+    SELECT u.id, u.email, u.username,
+      (SELECT COUNT(DISTINCT pp1.pact_id)
+       FROM pact_participants pp1
+       JOIN pact_participants pp2 ON pp2.pact_id = pp1.pact_id
+       WHERE pp1.user_id = ? AND pp2.user_id = u.id) as sharedPacts
     FROM friendships f
     JOIN users u ON u.id = f.friend_id
     WHERE f.user_id = ?
     ORDER BY u.username ASC
-  `).all(req.user.id);
+  `).all(req.user.id, req.user.id);
 
   res.json(friends);
 });
@@ -50,8 +55,10 @@ router.post('/requests', (req, res) => {
   }
 
   const value = identifier.trim().toLowerCase();
+  // Username search respects `discoverable`; a direct email match always
+  // works (you already know exactly who you're looking for).
   const addressee = db.prepare(
-    'SELECT id, email, username FROM users WHERE email = ? OR username = ?'
+    'SELECT id, email, username FROM users WHERE email = ? OR (username = ? AND discoverable = 1)'
   ).get(value, value);
 
   if (!addressee) {

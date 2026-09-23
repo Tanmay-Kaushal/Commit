@@ -7,15 +7,24 @@ const { getFriendInvitePreview, getPactInvitePreview } = require('../invitePrevi
 
 const router = express.Router();
 
-function appUrl() {
-  return (process.env.APP_URL || 'http://localhost:4000').replace(/\/$/, '');
+// Prefers an explicit APP_URL, then Railway's own public-domain var, then
+// falls back to whatever host/protocol the request actually arrived on
+// (requires `app.set('trust proxy', ...)` in index.js so req.protocol
+// reflects X-Forwarded-Proto instead of always reporting http). Only
+// falls back to localhost if none of that is available (e.g. this file
+// required outside a request, or a bare `curl` with no Host header).
+function appUrl(req) {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  if (req) return `${req.protocol}://${req.get('host')}`;
+  return 'http://localhost:4000';
 }
 
 // ---- "Invite friends on Commit" (Profile page) ----
 
 router.get('/friend-link', requireAuth, (req, res) => {
   const code = getOrCreateUserInviteCode(req.user.id);
-  res.json({ code, url: `${appUrl()}/i/${code}` });
+  res.json({ code, url: `${appUrl(req)}/i/${code}` });
 });
 
 // Public preview — used by /i/:code page and index.js's meta tags.
@@ -57,7 +66,7 @@ router.get('/pact-link/:pactId', requireAuth, (req, res) => {
   if (!['pending_invite', 'active'].includes(pact.status)) return res.status(400).json({ error: 'This pact is no longer accepting new participants' });
 
   const code = getOrCreatePactInviteCode(pact.id);
-  res.json({ code, url: `${appUrl()}/p/${code}` });
+  res.json({ code, url: `${appUrl(req)}/p/${code}` });
 });
 
 router.get('/pact/:code', (req, res) => {

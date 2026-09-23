@@ -62,10 +62,43 @@ async function sendPushToUser(userId, payload) {
   );
 }
 
-// Fires the socket event (in-page popup) and a push (background) together.
+function getNotifyPrefs(userId) {
+  const row = db.prepare('SELECT notify_prefs FROM users WHERE id = ?').get(userId);
+  if (!row) return {};
+  try {
+    return JSON.parse(row.notify_prefs || '{}');
+  } catch {
+    return {};
+  }
+}
+
+// `master: false` turns off all push; a per-type `false` (keyed by the same
+// string as socketEvent, e.g. "pact_invite") turns off just that type. The
+// inbox row is written regardless — prefs only gate the push channel.
+function isPushEnabled(userId, type) {
+  const prefs = getNotifyPrefs(userId);
+  if (prefs.master === false) return false;
+  if (prefs[type] === false) return false;
+  return true;
+}
+
+// Fires the socket event (in-page popup), persists it to the notifications
+// inbox, and sends a push (background) — the three notification channels
+// share this one call site so they can never drift out of sync.
 function notifyUser(io, userId, socketEvent, socketPayload, pushPayload) {
   if (io) io.to(`user:${userId}`).emit(socketEvent, socketPayload);
-  sendPushToUser(userId, pushPayload).catch((err) => console.error('[push] notifyUser failed:', err.message));
+
+  try {
+    db.prepare(
+      'INSERT INTO notifications (user_id, type, title, body, url, payload) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, socketEvent, pushPayload.title, pushPayload.body, pushPayload.url || null, JSON.stringify(socketPayload));
+  } catch (err) {
+    console.error('[notifications] failed to persist:', err.message);
+  }
+
+  if (isPushEnabled(userId, socketEvent)) {
+    sendPushToUser(userId, pushPayload).catch((err) => console.error('[push] notifyUser failed:', err.message));
+  }
 }
 
 module.exports = { pushConfigured, sendPushToUser, notifyUser, vapidPublicKey: () => vapidKeys?.publicKey || null };

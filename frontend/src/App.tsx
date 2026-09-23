@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './components/ui/Toast';
 import Login from './pages/Login';
 
 // Lazy-loaded so the initial bundle is just the login screen.
@@ -12,11 +13,17 @@ const TimelinePage = lazy(() => import('./pages/TimelinePage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const AcceptFriendInvite = lazy(() => import('./pages/AcceptFriendInvite'));
 const AcceptPactInvite = lazy(() => import('./pages/AcceptPactInvite'));
+const FriendsPage = lazy(() => import('./pages/FriendsPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const AchievementsPage = lazy(() => import('./pages/AchievementsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const HelpPage = lazy(() => import('./pages/HelpPage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
 
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) || '';
 
 function PageFallback() {
-  return <div className="min-h-screen bg-stone-50 dark:bg-stone-950" />;
+  return <div className="min-h-screen bg-[var(--paper)]" />;
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -77,6 +84,54 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/friends"
+        element={
+          <ProtectedRoute>
+            <FriendsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <NotificationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/achievements"
+        element={
+          <ProtectedRoute>
+            <AchievementsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/help"
+        element={
+          <ProtectedRoute>
+            <HelpPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/about"
+        element={
+          <ProtectedRoute>
+            <AboutPage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
@@ -87,9 +142,11 @@ export default function App() {
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <BrowserRouter>
         <ThemeProvider>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </ToastProvider>
         </ThemeProvider>
       </BrowserRouter>
     </GoogleOAuthProvider>

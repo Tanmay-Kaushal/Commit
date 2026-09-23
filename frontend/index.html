@@ -6,13 +6,23 @@
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1c1917" />
+    <meta name="theme-color" content="#1a1815" />
     <title>Commit</title>
+    <!-- One merged request, variable-weight Quicksand (one file covers 400-700)
+         plus the single-weight display font — kept to two font files total. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Quicksand:wght@400..700&display=swap"
+      rel="stylesheet"
+    />
     <script>
       // Applied before React mounts so there's no flash of the wrong theme.
       try {
         var stored = localStorage.getItem('theme');
-        var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var dark =
+          stored === 'dark' ||
+          (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
         if (dark) document.documentElement.classList.add('dark');
       } catch (e) {}
     </script>

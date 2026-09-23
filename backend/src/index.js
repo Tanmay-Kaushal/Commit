@@ -15,12 +15,19 @@ const friendRoutes = require('./routes/friends');
 const debtRoutes = require('./routes/debts');
 const inviteRoutes = require('./routes/invites');
 const pushRoutes = require('./routes/push');
+const settingsRoutes = require('./routes/settings');
+const notificationRoutes = require('./routes/notifications');
+const statsRoutes = require('./routes/stats');
 const db = require('./db');
 const { verifyUser } = require('./auth');
 const { getFriendInvitePreview, getPactInvitePreview } = require('./invitePreview');
 const { startCronJob, stopCronJob } = require('./cronJob');
 
 const app = express();
+// Railway sits behind a reverse proxy — without this, req.protocol always
+// reports "http" even on an https:// visit, which broke invite links built
+// from the request (see routes/invites.js's appUrl()).
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
@@ -52,6 +59,9 @@ app.use('/api/friends', friendRoutes);
 app.use('/api/debts', debtRoutes);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/stats', statsRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
