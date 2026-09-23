@@ -1,4 +1,4 @@
-# Commit
+# Commit (v1.3)
 
 A habit accountability app for two (or more) people. You and a partner each
 commit to a habit over a fixed date range, on chosen days of the week, with
